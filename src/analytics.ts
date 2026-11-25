@@ -2,7 +2,7 @@
 // no personal data. We call GoatCounter's counting endpoint directly instead of loading
 // its script. Set GOATCOUNTER_CODE to "" to turn counting off (e.g. in a fork).
 
-export const GOATCOUNTER_CODE = "";
+export const GOATCOUNTER_CODE: string = "chess-harness";
 
 const enabled = () =>
   GOATCOUNTER_CODE !== "" && typeof location !== "undefined" && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
