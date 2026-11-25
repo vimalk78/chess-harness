@@ -1,32 +1,98 @@
-# React + TypeScript + Vite
+# Chess Agent Arena
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Pit two chess **agents** against each other, or play one yourself, and decide whether "model + harness" beats "model alone".
 
-Currently, two official plugins are available:
+An agent is a model plus a harness. Each turn the referee gives the agent the game so far and asks for a move. The harness is everything the agent does inside that turn. The referee only enforces the rules, and no chess engine picks or suggests moves.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Everything runs in your browser. You bring an [OpenRouter](https://openrouter.ai/keys) key; it's sent only to openrouter.ai and is saved only if you tick "remember".
 
-## React Compiler
+## Run it
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm test         # unit tests
+npm run build    # static site in dist/, host anywhere
+```
 
-## Expanding the Oxlint configuration
+## Built-in agents
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+| Agent | What the model gets each turn | What happens with its reply |
+|---|---|---|
+| **Raw** | "You are playing White. The game so far in PGN: … Reply with only your next move." No board, no legal moves. | The first move-shaped word is sent to the referee unchecked. A rejected move comes back as one bare line: "Your move X was rejected: … Try again." |
+| **Harnessed** | System prompt with a procedure (threats → candidates → safety check → `MOVE: <san>`), plus FEN, an ASCII board, the move history and the full legal-move list. | Checks the move itself, re-asks up to 2 times quoting the exact problem, and as a last resort plays a random legal move (noted in the log). |
+| **Human** | – | You drag pieces on the board. |
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
+Both LLM agents work with any OpenRouter model ID, and each side has its own model and reasoning-effort setting, so you can test the same model with and without a harness, or a cheap model with a harness against an expensive one without.
+
+**Referee rules:** a move can be SAN (`Nf3`) or UCI (`g1f3`). Three rejected moves in one turn forfeits the game. API errors (bad key, no credit, rate limits) pause the game instead of counting against the agent, and Resume replays the turn. A game is a draw after 300 half-moves.
+
+Every prompt, reply, token count and cost is shown in the side panels. You can copy the PGN or download the full log as JSON.
+
+## Write your own harness
+
+Add a file to `src/agents/` that exports an `AgentDefinition`, then add it to the list in `src/agents/registry.ts`. Your agent can make as many LLM calls as it likes and use `chess.js`; whatever it puts in `log` shows up in its panel.
+
+```ts
+// src/agents/vote.ts: ask 3 times, play the most common legal answer
+import { legalSan } from "./chessUtil";
+import { buildUserPrompt, SYSTEM_PROMPT } from "./harnessed";
+import { extractMove } from "./parse";
+import type { AgentDefinition, LogEntry } from "./types";
+
+export const voteAgent: AgentDefinition = {
+  id: "vote",
+  label: "Majority vote ×3",
+  description: "Harnessed prompt, sampled 3 times; the most common legal move wins.",
+  needsModel: true,
+  create(settings, { llm }) {
+    return {
+      async nextMove(game) {
+        const messages = [
+          { role: "system" as const, content: SYSTEM_PROMPT },
+          { role: "user" as const, content: buildUserPrompt(game) },
+        ];
+        const log: LogEntry[] = [{ kind: "prompt", text: messages[1].content }];
+        const replies = await Promise.all(
+          [1, 2, 3].map(() => llm.chat({ model: settings.model, messages, reasoningEffort: settings.reasoningEffort, signal: game.signal })),
+        );
+        const votes = new Map<string, number>();
+        for (const r of replies) {
+          log.push({ kind: "response", text: r.text, usage: r.usage });
+          const m = extractMove(r.text);
+          const san = m && legalSan(game.fen, m);
+          if (san) votes.set(san, (votes.get(san) ?? 0) + 1);
+        }
+        const best = [...votes].sort((a, b) => b[1] - a[1])[0]?.[0] ?? game.legalMoves[0];
+        log.push({ kind: "note", text: `Votes: ${JSON.stringify(Object.fromEntries(votes))}` });
+        return { move: best, log };
+      },
+    };
   },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+};
+```
+
+What `nextMove` receives (`src/agents/types.ts`):
+
+```ts
+interface GameView {
+  history: string[];          // SAN moves so far
+  fen: string;
+  legalMoves: string[];       // SAN
+  myColor: "w" | "b";
+  previousAttempts: { move: string; error: string }[]; // moves the referee rejected this turn
+  signal: AbortSignal;        // pass to LLM calls so Pause/Stop can cancel them
 }
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+**Keeping it fair:** if your harness calls a chess engine, evaluates positions or uses an opening book, it's no longer testing the model. Say so if you share results.
+
+## Layout
+
+```
+src/agents/   Agent interface, built-in agents, move parser, registry
+src/game/     Referee (turn loop, legality, forfeits, pause) and PGN
+src/llm/      OpenRouter client
+src/ui/       React components and the useGame hook
+docs/         Design spec, plan, and background research
+```
