@@ -339,7 +339,7 @@ export default function App() {
             onHumanMove={humanMove}
           />
 
-          <MoveList history={state.history} />
+          <MoveList history={state.history} result={state.result} />
 
           {state.history.length > 0 && (
             <div className="controls">

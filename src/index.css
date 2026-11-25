@@ -123,23 +123,33 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 
 .board { width: 100%; aspect-ratio: 1; }
 
-.moves {
-  list-style: none;
-  margin: 0;
-  padding: 8px 12px;
+.moves-box {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  max-height: 160px;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  column-gap: 12px;
-  font-variant-numeric: tabular-nums;
+  padding: 10px 12px;
 }
-.moves li { display: grid; grid-template-columns: 2.4em 1fr 1fr; gap: 4px; }
+.moves-box header { margin-bottom: 6px; }
+.moves-box h3 { margin: 0; font-size: 0.95rem; }
+.moves-box .empty { margin: 0; }
+.moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88rem;
+}
+.moves li { display: inline-flex; gap: 6px; align-items: baseline; white-space: nowrap; }
 .moves .num { color: var(--muted); }
-.moves .empty { color: var(--muted); display: block; }
+.moves .mv { padding: 0 3px; border-radius: 4px; }
+.moves .mv.last { background: rgba(255, 213, 79, 0.45); color: var(--text); font-weight: 600; }
+.moves .result { font-weight: 700; color: var(--accent); }
 
 .panel {
   background: var(--surface);
