@@ -41,8 +41,14 @@ body { margin: 0; }
 
 .app { max-width: 1500px; margin: 0 auto; padding: 20px 24px 32px; }
 
-.top h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.01em; }
-.tagline { margin: 2px 0 0; color: var(--muted); }
+.brand { margin: 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.top h1 { margin: 2px 0 0; font-size: 1.9rem; letter-spacing: -0.015em; line-height: 1.2; }
+.lede { margin: 8px 0 0; max-width: 72ch; color: var(--muted); font-size: 1.02rem; }
+.steps { list-style: none; counter-reset: step; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; padding: 0; max-width: 1000px; }
+.steps li { counter-increment: step; display: flex; gap: 10px; align-items: baseline; font-size: 0.9rem; color: var(--muted); }
+.steps li::before { content: counter(step); flex: none; width: 1.6em; height: 1.6em; border-radius: 50%; display: inline-grid; place-items: center; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: 0.8rem; }
+.steps strong { color: var(--text); }
+@media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
 
 .setup {
   display: grid;

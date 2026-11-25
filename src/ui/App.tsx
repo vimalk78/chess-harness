@@ -203,10 +203,30 @@ export default function App() {
   return (
     <div className="app">
       <header className="top">
-        <div>
-          <h1>Chess Agent Arena</h1>
-          <p className="tagline">Model vs model, or model + harness vs model. Watch every prompt and decide for yourself.</p>
-        </div>
+        <p className="brand">Chess Agent Arena</p>
+        <h1>Is it the model, or the harness?</h1>
+        <p className="lede">
+          People say what wraps an AI model matters more than the model itself. Test it at chess: you control what the model
+          sees each turn, what it's told to check, and what happens when it tries an illegal move. Pit a small model with a
+          good harness against a big model without one, and watch every prompt.
+        </p>
+        <ol className="steps">
+          <li>
+            <span>
+              <strong>Pick a model for each side.</strong> Free OpenRouter models work.
+            </span>
+          </li>
+          <li>
+            <span>
+              <strong>Pick or build a harness.</strong> Prompts, plus facts computed from the board.
+            </span>
+          </li>
+          <li>
+            <span>
+              <strong>Watch them play.</strong> Every prompt and move is shown; one referee judges both sides.
+            </span>
+          </li>
+        </ol>
       </header>
 
       {shared && (
