@@ -22,7 +22,7 @@ export interface Usage {
 
 export type LogEntry =
   | { kind: "prompt"; text: string }
-  | { kind: "response"; text: string; usage?: Usage }
+  | { kind: "response"; text: string; usage?: Usage; reasoning?: string }
   | { kind: "note"; text: string };
 
 export interface AgentResult {
@@ -53,7 +53,7 @@ export interface LlmClient {
     messages: ChatMessage[];
     reasoningEffort?: ReasoningEffort;
     signal: AbortSignal;
-  }): Promise<{ text: string; usage?: Usage }>;
+  }): Promise<{ text: string; usage?: Usage; reasoning?: string }>;
 }
 
 export interface AgentDeps {

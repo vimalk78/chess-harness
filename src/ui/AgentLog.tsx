@@ -83,6 +83,12 @@ function Entry({ entry }: { entry: PanelEntry }) {
     case "response":
       return (
         <div className="entry response">
+          {entry.reasoning && (
+            <details className="reasoning">
+              <summary>Reasoning ({entry.reasoning.length.toLocaleString()} chars)</summary>
+              <pre>{entry.reasoning}</pre>
+            </details>
+          )}
           <pre>{entry.text || "(empty reply)"}</pre>
           {entry.usage && (
             <div className="usage">

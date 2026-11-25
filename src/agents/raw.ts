@@ -31,7 +31,7 @@ export const rawAgent: AgentDefinition = {
           reasoningEffort: settings.reasoningEffort,
           signal: game.signal,
         });
-        log.push({ kind: "response", text: res.text, usage: res.usage });
+        log.push({ kind: "response", text: res.text, usage: res.usage, reasoning: res.reasoning });
         const move = extractMove(res.text) ?? res.text.trim().slice(0, 60);
         return { move, log };
       },

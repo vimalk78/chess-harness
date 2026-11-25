@@ -2,7 +2,9 @@ import type { ChatMessage, LlmClient, ReasoningEffort, Usage } from "../agents/t
 import { abortableSleep, RateLimiter } from "./rateLimiter";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const TIMEOUT_MS = 5 * 60 * 1000;
+// Reasoning models on free tiers can think for many minutes per move. OpenRouter sends the
+// response headers immediately and the body only when the model is done, so this bounds the wait.
+const DEFAULT_TIMEOUT_MS = 20 * 60 * 1000;
 const MAX_RATE_LIMIT_RETRIES = 4;
 /** Waits (seconds) when the model's own provider is overloaded; these spells often last minutes. */
 const UPSTREAM_RETRY_DELAYS_S = [10, 20, 30, 45, 60, 60];
@@ -10,7 +12,7 @@ const UPSTREAM_RETRY_DELAYS_S = [10, 20, 30, 45, 60, 60];
 type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
 interface OpenRouterResponse {
-  choices?: { message?: { content?: string | null } }[];
+  choices?: { message?: { content?: string | null; reasoning?: string | null } }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
   error?: { message?: string; metadata?: { provider_name?: string; raw?: unknown } };
 }
@@ -28,6 +30,7 @@ export interface OpenRouterOptions {
   now?: () => number;
   /** Called before each rate-limit wait, and with null once a call goes through. */
   onWait?: (info: WaitInfo | null) => void;
+  timeoutMs?: number;
 }
 
 export const isFreeModel = (model: string) => model.endsWith(":free");
@@ -40,6 +43,7 @@ export class OpenRouterClient implements LlmClient {
   private readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   private readonly now: () => number;
   private readonly onWait: (info: WaitInfo | null) => void;
+  private readonly timeoutMs: number;
 
   constructor(getKey: () => string, fetchFn: FetchFn = (u, i) => fetch(u, i), opts: OpenRouterOptions = {}) {
     this.getKey = getKey;
@@ -48,6 +52,7 @@ export class OpenRouterClient implements LlmClient {
     this.sleep = opts.sleep ?? abortableSleep;
     this.now = opts.now ?? Date.now;
     this.onWait = opts.onWait ?? (() => {});
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   async chat(req: {
@@ -55,7 +60,7 @@ export class OpenRouterClient implements LlmClient {
     messages: ChatMessage[];
     reasoningEffort?: ReasoningEffort;
     signal: AbortSignal;
-  }): Promise<{ text: string; usage?: Usage }> {
+  }): Promise<{ text: string; usage?: Usage; reasoning?: string }> {
     const key = this.getKey().trim();
     if (!key) throw new Error("No OpenRouter API key set");
 
@@ -69,22 +74,36 @@ export class OpenRouterClient implements LlmClient {
     for (let attempt = 0; ; attempt++) {
       if (isFreeModel(req.model)) await this.freeLimiter.acquire(req.signal);
 
-      const res = await this.fetchFn(ENDPOINT, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-          "X-Title": "Chess Agent Arena",
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.any([req.signal, AbortSignal.timeout(TIMEOUT_MS)]),
-      });
+      const timeout = AbortSignal.timeout(this.timeoutMs);
+      const timedOut = () =>
+        new Error(
+          `${req.model} took longer than ${Math.round(this.timeoutMs / 60000)} minutes to reply, so the app gave up. ` +
+            `Try a lower reasoning effort or a faster model.`,
+        );
+      let res: Response;
+      try {
+        res = await this.fetchFn(ENDPOINT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+            "X-Title": "Chess Agent Arena",
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.any([req.signal, timeout]),
+        });
+      } catch (err) {
+        if (!req.signal.aborted && timeout.aborted) throw timedOut();
+        throw err;
+      }
 
       let data: OpenRouterResponse;
       try {
         data = (await res.json()) as OpenRouterResponse;
-      } catch {
-        throw new Error(`OpenRouter ${res.status}: unreadable response`);
+      } catch (err) {
+        if (req.signal.aborted) throw err; // paused/stopped by the user
+        if (timeout.aborted) throw timedOut();
+        throw new Error(`OpenRouter ${res.status} (${req.model}): unreadable response`);
       }
 
       if (res.status === 429) {
@@ -101,7 +120,9 @@ export class OpenRouterClient implements LlmClient {
       if (!res.ok) throw new Error(`OpenRouter ${res.status} (${req.model}): ${describeError(data, res.statusText)}`);
       if (data.error) throw new Error(`OpenRouter (${req.model}): ${describeError(data, "unknown error")}`);
 
-      const text = data.choices?.[0]?.message?.content ?? "";
+      const message = data.choices?.[0]?.message;
+      const text = message?.content ?? "";
+      const reasoning = message?.reasoning || undefined;
       const u = data.usage;
       const usage: Usage | undefined = u
         ? {
@@ -110,7 +131,7 @@ export class OpenRouterClient implements LlmClient {
             ...(u.cost !== undefined ? { costUsd: u.cost } : {}),
           }
         : undefined;
-      return { text, usage };
+      return reasoning ? { text, usage, reasoning } : { text, usage };
     }
   }
 

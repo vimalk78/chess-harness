@@ -168,6 +168,9 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .entry.prompt summary { cursor: pointer; color: var(--muted); }
 .entry.prompt pre { background: var(--code-bg); padding: 8px; border-radius: 6px; margin-top: 4px; }
 .entry.response { background: var(--code-bg); padding: 8px; }
+.entry .reasoning { margin-bottom: 6px; }
+.entry .reasoning summary { cursor: pointer; color: var(--muted); }
+.entry .reasoning pre { max-height: 320px; overflow-y: auto; margin-top: 4px; padding: 6px; border-left: 2px solid var(--border); color: var(--muted); }
 .entry .usage { margin-top: 4px; color: var(--muted); font-size: 0.75rem; }
 .entry.note { background: var(--note-bg); padding: 6px 8px; }
 .entry.illegal { background: var(--bad-bg); color: var(--bad); padding: 6px 8px; font-weight: 500; }

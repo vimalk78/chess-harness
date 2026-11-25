@@ -66,4 +66,43 @@ describe("OpenRouterClient", () => {
     const res = await client.chat({ model: "m", messages: [], signal: new AbortController().signal });
     expect(res.text).toBe("");
   });
+
+  it("returns the model's reasoning text when OpenRouter includes it", async () => {
+    const body = { choices: [{ message: { content: "MOVE: e4", reasoning: "Threats: none. Candidates: e4, d4." } }] };
+    const res = await new OpenRouterClient(() => "k", mockFetch(200, body)).chat({ model: "m", messages: [], signal: new AbortController().signal });
+    expect(res.reasoning).toBe("Threats: none. Candidates: e4, d4.");
+  });
+
+  it("reports a timeout while waiting for the body as a timeout, not an unreadable response", async () => {
+    // Headers arrive at once; the body never does (like a model thinking for too long).
+    const slow = async (_u: string, init: RequestInit) =>
+      new Response(
+        new ReadableStream({
+          start(ctrl) {
+            init.signal!.addEventListener("abort", () => ctrl.error(init.signal!.reason));
+          },
+        }),
+        { status: 200 },
+      );
+    const client = new OpenRouterClient(() => "k", slow, { timeoutMs: 30 });
+    await expect(client.chat({ model: "slow/model:free", messages: [], signal: new AbortController().signal })).rejects.toThrow(
+      /slow\/model:free took longer than .* minutes to reply/,
+    );
+  });
+
+  it("passes a user abort through unchanged", async () => {
+    const ctrl = new AbortController();
+    const slow = async (_u: string, init: RequestInit) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            init.signal!.addEventListener("abort", () => c.error(new Error("aborted by user")));
+          },
+        }),
+        { status: 200 },
+      );
+    const p = new OpenRouterClient(() => "k", slow).chat({ model: "m", messages: [], signal: ctrl.signal });
+    setTimeout(() => ctrl.abort(), 10);
+    await expect(p).rejects.toThrow("aborted by user");
+  });
 });

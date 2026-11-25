@@ -29,13 +29,14 @@ A full game usually takes 80–200 requests, so on 50/day expect part of a game 
 |---|---|---|
 | **Raw** | "You are playing White. The game so far in PGN: … Reply with only your next move." No board, no legal moves. | The first move-shaped word is sent to the referee unchecked. A rejected move comes back as one bare line: "Your move X was rejected: … Try again." |
 | **Harnessed** | System prompt with a procedure (threats → candidates → safety check → `MOVE: <san>`), plus FEN, an ASCII board, the move history and the full legal-move list. | Checks the move itself, re-asks up to 2 times quoting the exact problem, and as a last resort plays a random legal move (noted in the log). |
+| **Harnessed + tactical facts** | Everything in Harnessed, plus a "Board facts" block computed from the rules each turn: which pieces are attacked and by what, which are undefended, every capture (and what it takes), every checking move. | Same as Harnessed. The facts use no evaluation, search or piece values; the model still decides what matters. |
 | **Human** | – | You drag pieces on the board. |
 
 Both LLM agents work with any OpenRouter model ID, and each side has its own model and reasoning-effort setting, so you can test the same model with and without a harness, or a cheap model with a harness against an expensive one without.
 
 **Referee rules:** a move can be SAN (`Nf3`) or UCI (`g1f3`). Three rejected moves in one turn forfeits the game. API errors (bad key, no credit, rate limits) pause the game instead of counting against the agent, and Resume replays the turn. A game is a draw after 300 half-moves.
 
-Every prompt, reply, token count and cost is shown in the side panels. You can copy the PGN or download the full log as JSON.
+Every prompt, reply, token count and cost is shown in the side panels, along with the model's reasoning when OpenRouter returns it. You can copy the PGN or download the full log as JSON.
 
 ## Write your own harness
 

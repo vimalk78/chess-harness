@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { describe, expect, it, vi } from "vitest";
-import { harnessedAgent } from "./harnessed";
+import { harnessedAgent, tacticalAgent } from "./harnessed";
 import { humanAgent } from "./human";
 import { rawAgent } from "./raw";
 import type { AgentDeps, ChatMessage, GameView, LlmClient } from "./types";
@@ -109,5 +109,28 @@ describe("human agent", () => {
   it("waits for the board move", async () => {
     const res = await humanAgent.create({ model: "" }, { llm: fakeLlm([]).llm, waitForHumanMove: async () => "d4" }).nextMove(view([]));
     expect(res).toEqual({ move: "d4", log: [] });
+  });
+});
+
+describe("tactical agent", () => {
+  it("adds rules-derived board facts to the harnessed prompt", async () => {
+    const { llm, calls } = fakeLlm(["MOVE: Nxd8"]);
+    const res = await tacticalAgent.create({ model: "m" }, deps(llm)).nextMove(view(["Nf3", "e5", "Nxe5", "Nf6", "Nxf7", "Nc6"]));
+    expect(res.move).toBe("Nxd8");
+    expect(calls[0][1].content).toContain("Board facts (computed from the rules, not an engine");
+    expect(calls[0][1].content).toContain("Nxd8 (takes queen)");
+  });
+
+  it("plain harnessed prompt has no board facts but asks about opportunities", async () => {
+    const { llm, calls } = fakeLlm(["MOVE: e4"]);
+    await harnessedAgent.create({ model: "m" }, deps(llm)).nextMove(view([]));
+    expect(calls[0][1].content).not.toContain("Board facts");
+    expect(calls[0][0].content).toContain("Opportunities");
+  });
+
+  it("keeps the model's reasoning in the log", async () => {
+    const llm: LlmClient = { chat: async () => ({ text: "MOVE: e4", reasoning: "thinking hard" }) };
+    const res = await harnessedAgent.create({ model: "m" }, deps(llm)).nextMove(view([]));
+    expect(res.log[1]).toMatchObject({ kind: "response", reasoning: "thinking hard" });
   });
 });
