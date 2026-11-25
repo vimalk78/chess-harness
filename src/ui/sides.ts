@@ -1,5 +1,5 @@
 import type { Color } from "../agents/types";
-import type { ModelInfo } from "../llm/models";
+import { isOftenRateLimited, type ModelInfo } from "../llm/models";
 import type { SideConfig } from "./useGame";
 
 /**
@@ -12,14 +12,12 @@ export const FREE_MODEL_PREFERENCES: Record<Color, string[]> = {
   b: ["nvidia/nemotron-3-ultra-550b-a55b:free", "nvidia/nemotron-3.5-super-vl:free", "baidu/ernie-5.5-flash-preview:free"],
 };
 
-const OFTEN_RATE_LIMITED = /^google\//;
-
 /** First available free model for a side: the preference list, then any free model not known to be throttled. */
 export function pickFreeModel(color: Color, free: ModelInfo[], preferences = FREE_MODEL_PREFERENCES): string | null {
   const ids = new Set(free.map((m) => m.id));
   return (
     preferences[color].find((id) => ids.has(id)) ??
-    free.find((m) => !OFTEN_RATE_LIMITED.test(m.id))?.id ??
+    free.find((m) => !isOftenRateLimited(m.id))?.id ??
     free[0]?.id ??
     null
   );

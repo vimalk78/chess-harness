@@ -132,3 +132,12 @@ describe("models", () => {
     await expect(fetchFreeQuota("k", async () => json(401, {}))).rejects.toThrow(/not recognised/);
   });
 });
+
+describe("isOftenRateLimited", async () => {
+  const { isOftenRateLimited } = await import("./models");
+  it("flags only Google-hosted free models", () => {
+    expect(isOftenRateLimited("google/gemma-4-26b-a4b-it:free")).toBe(true);
+    expect(isOftenRateLimited("google/gemini-3.1-pro-preview")).toBe(false);
+    expect(isOftenRateLimited("nvidia/nemotron-3.5-lightning:free")).toBe(false);
+  });
+});

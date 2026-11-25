@@ -17,6 +17,14 @@ interface RawModel {
 
 const MODELS_URL = "https://openrouter.ai/api/v1/models";
 
+/**
+ * Free models whose provider often rate-limits them (Google AI Studio's free Gemma
+ * endpoints). They're hidden from the model dropdown but can still be typed in.
+ */
+export function isOftenRateLimited(id: string): boolean {
+  return /^google\/.+:free$/.test(id);
+}
+
 /** Chat-capable text models, free ones first, then by name. */
 export function parseModels(json: unknown): ModelInfo[] {
   const data = (json as { data?: RawModel[] })?.data ?? [];

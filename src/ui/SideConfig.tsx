@@ -3,7 +3,7 @@ import { CODE_AGENTS, customAgentId, getAgent, isPreset } from "../agents/regist
 import type { HarnessConfig } from "../harness/config";
 import { PRESETS } from "../harness/presets";
 import type { Color, ReasoningEffort } from "../agents/types";
-import type { ModelInfo } from "../llm/models";
+import { isOftenRateLimited, type ModelInfo } from "../llm/models";
 import type { SideConfig as Side } from "./useGame";
 
 const OTHER = "__other__";
@@ -24,7 +24,9 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
   const def = getAgent(value.agentId);
   const id = `side-${color}`;
   const modelId = value.model.trim();
-  const choices = (models ?? []).filter((m) => !freeOnly || m.free);
+  const offered = (models ?? []).filter((m) => !freeOnly || m.free);
+  const choices = offered.filter((m) => !isOftenRateLimited(m.id));
+  const hiddenCount = offered.length - choices.length;
   const inList = choices.some((m) => m.id === modelId);
   const [typing, setTyping] = useState(false);
   // Free text when the list didn't load, when the user picked "Other", or when the saved ID isn't offered.
@@ -36,7 +38,9 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
       ? null
       : !known
         ? "Not in OpenRouter's current model list."
-        : freeOnly && !known.free
+        : isOftenRateLimited(known.id)
+          ? "Often rate-limited by its provider, so it's hidden from the list. Games may pause while it waits."
+          : freeOnly && !known.free
           ? "This is a paid model."
           : null;
 
@@ -125,6 +129,12 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
             />
           )}
           <p className="hint mono">{modelId || "no model selected"}</p>
+          {hiddenCount > 0 && (
+            <p className="hint">
+              {hiddenCount} Google-hosted free model{hiddenCount === 1 ? " is" : "s are"} hidden: their provider often
+              rate-limits them. You can still type the ID under "Other model ID…".
+            </p>
+          )}
           {warning && <p className="hint warn">{warning}</p>}
           <label htmlFor={`${id}-effort`}>Reasoning effort</label>
           <select
