@@ -15,6 +15,26 @@ npm test         # unit tests
 npm run build    # static site in dist/, host anywhere
 ```
 
+## Self-hosting with Tailscale Funnel
+
+The build is a static site, so any static file server works. One way to publish it from your own machine:
+
+```bash
+npm run build
+# serve dist/ on localhost (systemd user service shown; any static server works)
+cat > ~/.config/systemd/user/chess-arena.service <<'UNIT'
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 4173 --bind 127.0.0.1 --directory /path/to/chess-harness/dist
+Restart=on-failure
+[Install]
+WantedBy=default.target
+UNIT
+systemctl --user enable --now chess-arena.service
+tailscale funnel --bg 4173          # public https://<machine>.<tailnet>.ts.net/
+```
+
+To update the site, run `npm run build` again. To take it down, run `tailscale funnel --https=443 off`. Visitors' API keys stay in their own browsers; nothing secret is stored on the server.
+
 ## Free OpenRouter accounts
 
 The app loads OpenRouter's live model list. "Show free models only" is on by default, and the default matchup uses two free models: a small one with the harness (`google/gemma-4-26b-a4b-it:free`) against a much larger one without it (`nvidia/nemotron-3-ultra-550b-a55b:free`).
