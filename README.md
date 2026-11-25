@@ -4,6 +4,8 @@ Pit two chess **agents** against each other, or play one yourself, and decide wh
 
 An agent is a model plus a harness. Each turn the referee gives the agent the game so far and asks for a move. The harness is everything the agent does inside that turn. The referee only enforces the rules, and no chess engine picks or suggests moves.
 
+**Try it:** https://vimalk78.github.io/chess-harness/
+
 Everything runs in your browser. You bring an [OpenRouter](https://openrouter.ai/keys) key; it's sent only to openrouter.ai and is saved only if you tick "remember".
 
 ## Run it
@@ -15,9 +17,9 @@ npm test         # unit tests
 npm run build    # static site in dist/, host anywhere
 ```
 
-## Self-hosting with Tailscale Funnel
+## Self-hosting
 
-The build is a static site, so any static file server works. One way to publish it from your own machine:
+The live site is deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. You can also serve it yourself, for example with Tailscale Funnel:
 
 ```bash
 npm run build
@@ -123,5 +125,5 @@ src/agents/   Agent interface, built-in agents, move parser, registry
 src/game/     Referee (turn loop, legality, forfeits, pause) and PGN
 src/llm/      OpenRouter client
 src/ui/       React components and the useGame hook
-docs/         Design spec, plan, and background research
+docs/         Design spec and plan
 ```

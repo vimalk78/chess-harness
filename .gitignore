@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Private: research and downloaded game logs stay local
+research_notes/
+reports/
+chess-agent-arena-*.json
