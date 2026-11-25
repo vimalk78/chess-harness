@@ -55,6 +55,9 @@ export function useGame(getKey: () => string) {
   const runnerRef = useRef<GameRunner | null>(null);
   const humanRef = useRef<{ resolve: (m: string) => void; game: GameView } | null>(null);
   const eventsRef = useRef<{ t: number; event: GameEvent }[]>([]);
+  // One client for the whole session, so the free-model rate limiter spans both sides and every game.
+  const llmRef = useRef<OpenRouterClient | null>(null);
+  llmRef.current ??= new OpenRouterClient(getKey);
 
   const start = useCallback(
     (sides: Record<Color, SideConfig>) => {
@@ -63,7 +66,7 @@ export function useGame(getKey: () => string) {
       humanRef.current = null;
 
       const deps: AgentDeps = {
-        llm: new OpenRouterClient(getKey),
+        llm: llmRef.current!,
         waitForHumanMove: (game) =>
           new Promise<string>((resolve, reject) => {
             humanRef.current = { resolve, game };
@@ -86,7 +89,7 @@ export function useGame(getKey: () => string) {
       setState({ ...initialState, status: "running", sides });
       void runner.start();
     },
-    [getKey],
+    [],
   );
 
   const pause = useCallback(() => runnerRef.current?.pause(), []);

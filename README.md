@@ -15,6 +15,14 @@ npm test         # unit tests
 npm run build    # static site in dist/, host anywhere
 ```
 
+## Free OpenRouter accounts
+
+The app loads OpenRouter's live model list. "Show free models only" is on by default, and the default matchup uses two free models: a small one with the harness (`google/gemma-4-26b-a4b-it:free`) against a much larger one without it (`nvidia/nemotron-3-ultra-550b-a55b:free`).
+
+Free models are limited to **20 requests/minute** and **50 requests/day** (1000/day once you've bought $10 of credits). The app spaces calls out to stay under the per-minute limit and retries if it gets a 429 anyway. When the daily limit is reached, the game pauses with a message; Resume continues it the next day (keep the tab open, or note the PGN). Requests used today are shown under the key field.
+
+A full game usually takes 80–200 requests, so on 50/day expect part of a game per day. Human vs LLM uses about half as many.
+
 ## Built-in agents
 
 | Agent | What the model gets each turn | What happens with its reply |

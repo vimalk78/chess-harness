@@ -6,15 +6,19 @@ import { AgentLog } from "./AgentLog";
 import { Board } from "./Board";
 import { KeyInput } from "./KeyInput";
 import { MoveList } from "./MoveList";
-import { MODEL_SUGGESTIONS, SideConfig } from "./SideConfig";
+import { SideConfig } from "./SideConfig";
+import { fetchFreeQuota, fetchModels, type FreeQuota, type ModelInfo } from "../llm/models";
 import { sideLabel, useGame, type SideConfig as Side } from "./useGame";
 
 const KEY_STORAGE = "arena.openrouterKey";
 const SIDES_STORAGE = "arena.sides";
+const FREE_ONLY_STORAGE = "arena.freeOnly";
 
 const DEFAULT_SIDES: Record<Color, Side> = {
-  w: { agentId: "harnessed", model: "anthropic/claude-haiku-5.5", effort: "" },
-  b: { agentId: "raw", model: "anthropic/claude-opus-5.5", effort: "" },
+  // Free models, so the defaults work on a free OpenRouter account:
+  // a small model with the harness vs a much larger model without it.
+  w: { agentId: "harnessed", model: "google/gemma-4-26b-a4b-it:free", effort: "" },
+  b: { agentId: "raw", model: "nvidia/nemotron-3-ultra-550b-a55b:free", effort: "" },
 };
 
 function loadSides(): Record<Color, Side> {
@@ -37,6 +41,11 @@ export default function App() {
   const [sides, setSides] = useState(loadSides);
   const [copied, setCopied] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [models, setModels] = useState<ModelInfo[] | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [freeOnly, setFreeOnly] = useState(() => localStorage.getItem(FREE_ONLY_STORAGE) !== "false");
+  const [quota, setQuota] = useState<FreeQuota | null>(null);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
 
   const keyRef = useRef(key);
   keyRef.current = key;
@@ -49,6 +58,35 @@ export default function App() {
   }, [key, remember]);
 
   useEffect(() => localStorage.setItem(SIDES_STORAGE, JSON.stringify(sides)), [sides]);
+  useEffect(() => localStorage.setItem(FREE_ONLY_STORAGE, String(freeOnly)), [freeOnly]);
+
+  useEffect(() => {
+    fetchModels()
+      .then(setModels)
+      .catch((e: Error) => setModelsError(e.message));
+  }, []);
+
+  // Free-model quota: check when the key changes and whenever a game pauses or ends.
+  useEffect(() => {
+    const k = key.trim();
+    if (!k) {
+      setQuota(null);
+      setQuotaError(null);
+      return;
+    }
+    const id = setTimeout(() => {
+      fetchFreeQuota(k)
+        .then((q) => {
+          setQuota(q);
+          setQuotaError(null);
+        })
+        .catch((e: Error) => {
+          setQuota(null);
+          setQuotaError(e.message);
+        });
+    }, 600);
+    return () => clearTimeout(id);
+  }, [key, state.status]);
 
   useEffect(() => {
     if (!state.thinking) return;
@@ -107,14 +145,27 @@ export default function App() {
       </header>
 
       <section className="setup">
-        <KeyInput value={key} remember={remember} disabled={playing} onChange={setKey} onRememberChange={setRemember} />
-        <SideConfig color="w" value={sides.w} disabled={playing} onChange={(v) => setSides((s) => ({ ...s, w: v }))} />
-        <SideConfig color="b" value={sides.b} disabled={playing} onChange={(v) => setSides((s) => ({ ...s, b: v }))} />
+        <KeyInput
+          value={key}
+          remember={remember}
+          disabled={playing}
+          quota={quota}
+          quotaError={quotaError}
+          freeOnly={freeOnly}
+          onChange={setKey}
+          onRememberChange={setRemember}
+          onFreeOnlyChange={setFreeOnly}
+        />
+        <SideConfig color="w" value={sides.w} disabled={playing} models={models} freeOnly={freeOnly} onChange={(v) => setSides((s) => ({ ...s, w: v }))} />
+        <SideConfig color="b" value={sides.b} disabled={playing} models={models} freeOnly={freeOnly} onChange={(v) => setSides((s) => ({ ...s, b: v }))} />
         <datalist id="model-suggestions">
-          {MODEL_SUGGESTIONS.map((m) => (
-            <option key={m} value={m} />
-          ))}
+          {(models ?? [])
+            .filter((m) => !freeOnly || m.free)
+            .map((m) => (
+              <option key={m.id} value={m.id} label={m.name} />
+            ))}
         </datalist>
+        {modelsError && <p className="hint">Couldn't load OpenRouter's model list ({modelsError}); you can still type any model ID.</p>}
       </section>
 
       <main className="arena">
@@ -198,7 +249,7 @@ function Status({ state }: { state: ReturnType<typeof useGame>["state"] }) {
   if (state.status === "paused") {
     return (
       <div className={`status ${state.pauseError ? "error" : ""}`}>
-        {state.pauseError ? `Paused: ${state.pauseError}` : "Paused"}. Resume replays the current turn.
+        {state.pauseError ? `Paused: ${state.pauseError.replace(/\.$/, "")}` : "Paused"}. Resume replays the current turn.
       </div>
     );
   }

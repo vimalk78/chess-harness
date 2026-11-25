@@ -1,26 +1,31 @@
 import { AGENTS, getAgent } from "../agents/registry";
 import type { Color, ReasoningEffort } from "../agents/types";
+import type { ModelInfo } from "../llm/models";
 import type { SideConfig as Side } from "./useGame";
-
-export const MODEL_SUGGESTIONS = [
-  "anthropic/claude-haiku-5.5",
-  "anthropic/claude-sonnet-5.5",
-  "anthropic/claude-opus-5.5",
-  "openai/gpt-5.5",
-  "google/gemini-3-flash-preview",
-  "google/gemini-3.1-pro-preview",
-];
 
 interface Props {
   color: Color;
   value: Side;
   disabled: boolean;
+  models: ModelInfo[] | null;
+  freeOnly: boolean;
   onChange: (v: Side) => void;
 }
 
-export function SideConfig({ color, value, disabled, onChange }: Props) {
+export function SideConfig({ color, value, disabled, models, freeOnly, onChange }: Props) {
   const def = getAgent(value.agentId);
   const id = `side-${color}`;
+  const modelId = value.model.trim();
+  const known = models?.find((m) => m.id === modelId);
+  const warning =
+    !models || !modelId
+      ? null
+      : !known
+        ? "Not in OpenRouter's current model list."
+        : freeOnly && !known.free
+          ? "This is a paid model."
+          : null;
+
   return (
     <fieldset className={`side side-${color}`} disabled={disabled}>
       <legend>
@@ -43,10 +48,12 @@ export function SideConfig({ color, value, disabled, onChange }: Props) {
             id={`${id}-model`}
             list="model-suggestions"
             value={value.model}
-            placeholder="e.g. anthropic/claude-haiku-5.5"
+            placeholder={freeOnly ? "pick a :free model" : "e.g. anthropic/claude-haiku-5.5"}
             spellCheck={false}
             onChange={(e) => onChange({ ...value, model: e.target.value })}
           />
+          {known && <p className="hint">{known.name}</p>}
+          {warning && <p className="hint warn">{warning}</p>}
           <label htmlFor={`${id}-effort`}>Reasoning effort</label>
           <select
             id={`${id}-effort`}

@@ -1,7 +1,9 @@
 import type { ChatMessage, LlmClient, ReasoningEffort, Usage } from "../agents/types";
+import { abortableSleep, RateLimiter } from "./rateLimiter";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_RATE_LIMIT_RETRIES = 4;
 
 type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -11,14 +13,29 @@ interface OpenRouterResponse {
   error?: { message?: string };
 }
 
+export interface OpenRouterOptions {
+  /** Throttle for ":free" models (OpenRouter allows 20/min per account). */
+  freeLimiter?: RateLimiter;
+  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  now?: () => number;
+}
+
+export const isFreeModel = (model: string) => model.endsWith(":free");
+
 /** Calls OpenRouter straight from the browser. The key never goes anywhere else. */
 export class OpenRouterClient implements LlmClient {
   private readonly getKey: () => string;
   private readonly fetchFn: FetchFn;
+  private readonly freeLimiter: RateLimiter;
+  private readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
+  private readonly now: () => number;
 
-  constructor(getKey: () => string, fetchFn: FetchFn = (u, i) => fetch(u, i)) {
+  constructor(getKey: () => string, fetchFn: FetchFn = (u, i) => fetch(u, i), opts: OpenRouterOptions = {}) {
     this.getKey = getKey;
     this.fetchFn = fetchFn;
+    this.freeLimiter = opts.freeLimiter ?? new RateLimiter(19, 60_000);
+    this.sleep = opts.sleep ?? abortableSleep;
+    this.now = opts.now ?? Date.now;
   }
 
   async chat(req: {
@@ -37,35 +54,69 @@ export class OpenRouterClient implements LlmClient {
     };
     if (req.reasoningEffort) body.reasoning = { effort: req.reasoningEffort };
 
-    const res = await this.fetchFn(ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        "X-Title": "Chess Agent Arena",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.any([req.signal, AbortSignal.timeout(TIMEOUT_MS)]),
-    });
+    for (let attempt = 0; ; attempt++) {
+      if (isFreeModel(req.model)) await this.freeLimiter.acquire(req.signal);
 
-    let data: OpenRouterResponse;
-    try {
-      data = (await res.json()) as OpenRouterResponse;
-    } catch {
-      throw new Error(`OpenRouter ${res.status}: unreadable response`);
+      const res = await this.fetchFn(ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "X-Title": "Chess Agent Arena",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.any([req.signal, AbortSignal.timeout(TIMEOUT_MS)]),
+      });
+
+      let data: OpenRouterResponse;
+      try {
+        data = (await res.json()) as OpenRouterResponse;
+      } catch {
+        throw new Error(`OpenRouter ${res.status}: unreadable response`);
+      }
+
+      if (res.status === 429) {
+        const wait = this.rateLimitWait(res, data, attempt);
+        if (typeof wait === "string") throw new Error(wait);
+        await this.sleep(wait, req.signal);
+        continue;
+      }
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${data.error?.message ?? res.statusText}`);
+      if (data.error) throw new Error(`OpenRouter: ${data.error.message ?? "unknown error"}`);
+
+      const text = data.choices?.[0]?.message?.content ?? "";
+      const u = data.usage;
+      const usage: Usage | undefined = u
+        ? {
+            promptTokens: u.prompt_tokens ?? 0,
+            completionTokens: u.completion_tokens ?? 0,
+            ...(u.cost !== undefined ? { costUsd: u.cost } : {}),
+          }
+        : undefined;
+      return { text, usage };
     }
-    if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${data.error?.message ?? res.statusText}`);
-    if (data.error) throw new Error(`OpenRouter: ${data.error.message ?? "unknown error"}`);
+  }
 
-    const text = data.choices?.[0]?.message?.content ?? "";
-    const u = data.usage;
-    const usage: Usage | undefined = u
-      ? {
-          promptTokens: u.prompt_tokens ?? 0,
-          completionTokens: u.completion_tokens ?? 0,
-          ...(u.cost !== undefined ? { costUsd: u.cost } : {}),
-        }
-      : undefined;
-    return { text, usage };
+  /** Milliseconds to wait before retrying, or an error message if retrying won't help. */
+  private rateLimitWait(res: Response, data: OpenRouterResponse, attempt: number): number | string {
+    const msg = data.error?.message ?? "Rate limit exceeded";
+    const remaining = res.headers.get("X-RateLimit-Remaining");
+    const limit = res.headers.get("X-RateLimit-Limit");
+    let resetMs = Number(res.headers.get("X-RateLimit-Reset")) || 0;
+    if (resetMs && resetMs < 1e12) resetMs *= 1000; // seconds → ms
+    const untilReset = resetMs ? resetMs - this.now() : 0;
+
+    const daily = /per[- ]day|daily/i.test(msg) || (remaining === "0" && untilReset > 2 * 60_000);
+    if (daily) {
+      const at = resetMs ? ` Resets at ${new Date(resetMs).toISOString().slice(11, 16)} UTC.` : " Resets at 00:00 UTC.";
+      const hint = limit === "50" || !limit ? " Buying $10 of OpenRouter credits raises the free limit to 1000/day." : "";
+      return `Free-model daily limit reached (${limit ?? 50} requests/day).${at}${hint}`;
+    }
+    if (attempt >= MAX_RATE_LIMIT_RETRIES) return `OpenRouter 429: ${msg} (gave up after ${attempt + 1} tries)`;
+
+    const retryAfter = Number(res.headers.get("Retry-After"));
+    if (retryAfter > 0) return Math.min(retryAfter * 1000, 65_000);
+    if (untilReset > 0) return Math.min(untilReset + 250, 65_000);
+    return Math.min(5_000 * 2 ** attempt, 65_000);
   }
 }
