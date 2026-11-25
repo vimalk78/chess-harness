@@ -2,9 +2,10 @@
 // board moves to the Human agent, and collects every event for the log download.
 
 import { useCallback, useRef, useState } from "react";
-import { getAgent } from "../agents/registry";
+import { getAgent, harnessConfigFor } from "../agents/registry";
 import { legalSan } from "../agents/chessUtil";
-import type { AgentDeps, Color, GameView, LogEntry, ReasoningEffort } from "../agents/types";
+import type { AgentDeps, Color, GameView, LogEntry, ReasoningEffort, StreamDelta } from "../agents/types";
+import type { HarnessConfig } from "../harness/config";
 import { GameRunner, type GameEvent, type GameResult } from "../game/referee";
 import { OpenRouterClient } from "../llm/openrouter";
 
@@ -27,6 +28,14 @@ export interface GameState {
   result: GameResult | null;
   reason: string | null;
   sides: Record<Color, SideConfig> | null;
+  /** Snapshot taken when the game starts, so later edits or deletes can't change a running game. */
+  labels: Record<Color, string> | null;
+  harnesses: Record<Color, HarnessConfig | null> | null;
+}
+
+export interface LiveOutput {
+  reasoning: string;
+  text: string;
 }
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -42,10 +51,17 @@ const initialState: GameState = {
   result: null,
   reason: null,
   sides: null,
+  labels: null,
+  harnesses: null,
 };
 
 export function sideLabel(side: SideConfig): string {
-  const def = getAgent(side.agentId);
+  let def;
+  try {
+    def = getAgent(side.agentId);
+  } catch {
+    return side.agentId;
+  }
   if (!def.needsModel) return def.label;
   return `${def.label.replace(/ \(.*\)$/, "")} · ${side.model}${side.effort ? ` (${side.effort})` : ""}`;
 }
@@ -55,6 +71,30 @@ export function useGame(getKey: () => string) {
   const runnerRef = useRef<GameRunner | null>(null);
   const humanRef = useRef<{ resolve: (m: string) => void; game: GameView } | null>(null);
   const eventsRef = useRef<{ t: number; event: GameEvent }[]>([]);
+  // Streamed model output, buffered and flushed to React at most once per animation frame.
+  const [live, setLive] = useState<Record<Color, LiveOutput | null>>({ w: null, b: null });
+  const liveBuf = useRef<Record<Color, LiveOutput | null>>({ w: null, b: null });
+  const liveFrame = useRef<number | null>(null);
+  const flushLive = useCallback((now = false) => {
+    const flush = () => {
+      liveFrame.current = null;
+      setLive({ w: liveBuf.current.w && { ...liveBuf.current.w }, b: liveBuf.current.b && { ...liveBuf.current.b } });
+    };
+    if (now) {
+      if (liveFrame.current !== null) cancelAnimationFrame(liveFrame.current);
+      flush();
+    } else if (liveFrame.current === null) {
+      liveFrame.current = requestAnimationFrame(flush);
+    }
+  }, []);
+  const clearLive = useCallback(
+    (color?: Color) => {
+      if (color) liveBuf.current[color] = null;
+      else liveBuf.current = { w: null, b: null };
+      flushLive(true);
+    },
+    [flushLive],
+  );
   // One client for the whole session, so the free-model rate limiter spans both sides and every game.
   const llmRef = useRef<OpenRouterClient | null>(null);
   const [rateWait, setRateWait] = useState<{ model: string; until: number; reason: string } | null>(null);
@@ -83,16 +123,33 @@ export function useGame(getKey: () => string) {
           deps,
         );
 
-      const runner: GameRunner = new GameRunner({ white: make("w"), black: make("b") }, (event) => {
+      const onStream = (color: Color, d: StreamDelta) => {
+        if (runnerRef.current !== runner) return;
+        if (d.start || !liveBuf.current[color]) liveBuf.current[color] = { reasoning: "", text: "" };
+        const buf = liveBuf.current[color]!;
+        if (d.reasoning) buf.reasoning += d.reasoning;
+        if (d.content) buf.text += d.content;
+        flushLive();
+      };
+      const runner: GameRunner = new GameRunner({ white: make("w"), black: make("b"), onStream }, (event) => {
         if (runnerRef.current !== runner) return; // event from a game that was replaced
         eventsRef.current.push({ t: Date.now(), event });
+        if (event.type === "log" || event.type === "turnStart") clearLive(event.color);
+        if (event.type === "paused" || event.type === "gameOver") clearLive();
         setState((s) => reduce(s, event));
       });
       runnerRef.current = runner;
-      setState({ ...initialState, status: "running", sides });
+      clearLive();
+      setState({
+        ...initialState,
+        status: "running",
+        sides,
+        labels: { w: sideLabel(sides.w), b: sideLabel(sides.b) },
+        harnesses: { w: harnessConfigFor(sides.w.agentId), b: harnessConfigFor(sides.b.agentId) },
+      });
       void runner.start();
     },
-    [],
+    [clearLive, flushLive],
   );
 
   const pause = useCallback(() => runnerRef.current?.pause(), []);
@@ -102,8 +159,9 @@ export function useGame(getKey: () => string) {
     runnerRef.current = null;
     r?.stop();
     humanRef.current = null;
+    clearLive();
     setState(initialState);
-  }, []);
+  }, [clearLive]);
 
   /** Called by the board on a drop. Returns false (snap back) unless it's a legal human move. */
   const humanMove = useCallback((from: string, to: string, isPawn: boolean): boolean => {
@@ -118,11 +176,21 @@ export function useGame(getKey: () => string) {
     return true;
   }, []);
 
-  const exportLog = useCallback(() => ({ sides: state.sides, result: state.result, reason: state.reason, history: state.history, events: eventsRef.current }), [state]);
+  const exportLog = useCallback(
+    () => ({
+      sides: state.sides,
+      harnesses: state.harnesses, // full configs, so anyone can see exactly what each side sent
+      result: state.result,
+      reason: state.reason,
+      history: state.history,
+      events: eventsRef.current,
+    }),
+    [state],
+  );
 
   // A wait only matters while the game is running.
   const visibleWait = state.status === "running" ? rateWait : null;
-  return { state, rateWait: visibleWait, start, pause, resume, reset, humanMove, exportLog };
+  return { state, live, rateWait: visibleWait, start, pause, resume, reset, humanMove, exportLog };
 }
 
 function reduce(s: GameState, e: GameEvent): GameState {

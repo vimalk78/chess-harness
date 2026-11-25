@@ -2,7 +2,7 @@
 // No UI and no network code, so it can be driven by fake agents in tests.
 
 import { Chess } from "chess.js";
-import type { Agent, Color, LogEntry } from "../agents/types";
+import type { Agent, Color, LogEntry, StreamDelta } from "../agents/types";
 
 export type GameResult = "1-0" | "0-1" | "1/2-1/2" | "*";
 
@@ -22,6 +22,8 @@ export interface RefereeOptions {
   maxIllegalAttempts?: number;
   /** Half-moves before the game is adjudicated a draw. */
   maxPlies?: number;
+  /** Live model output from the side to move (for display only). */
+  onStream?: (color: Color, delta: StreamDelta) => void;
 }
 
 const UCI = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/;
@@ -31,7 +33,7 @@ const colorName = (c: Color) => (c === "w" ? "White" : "Black");
 
 export class GameRunner {
   private chess = new Chess();
-  private readonly opts: Required<RefereeOptions>;
+  private readonly opts: Required<Omit<RefereeOptions, "onStream">> & Pick<RefereeOptions, "onStream">;
   private readonly emit: (e: GameEvent) => void;
   private turnAbort: AbortController | null = null;
   private pausedBy: "user" | "error" | null = null;
@@ -113,6 +115,9 @@ export class GameRunner {
             myColor: color,
             previousAttempts: [...attempts],
             signal: abort.signal,
+            onStream: (delta) => {
+              if (!abort.signal.aborted) this.opts.onStream?.(color, delta);
+            },
           });
           if (abort.signal.aborted) continue; // paused or stopped mid-call: discard, replay
           if (res.log.length) this.emit({ type: "log", color, entries: res.log });

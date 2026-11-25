@@ -60,6 +60,7 @@ export class OpenRouterClient implements LlmClient {
     messages: ChatMessage[];
     reasoningEffort?: ReasoningEffort;
     signal: AbortSignal;
+    onDelta?: (delta: { content?: string; reasoning?: string }) => void;
   }): Promise<{ text: string; usage?: Usage; reasoning?: string }> {
     const key = this.getKey().trim();
     if (!key) throw new Error("No OpenRouter API key set");
@@ -68,6 +69,7 @@ export class OpenRouterClient implements LlmClient {
       model: req.model,
       messages: req.messages,
       usage: { include: true },
+      stream: true,
     };
     if (req.reasoningEffort) body.reasoning = { effort: req.reasoningEffort };
 
@@ -95,6 +97,19 @@ export class OpenRouterClient implements LlmClient {
       } catch (err) {
         if (!req.signal.aborted && timeout.aborted) throw timedOut();
         throw err;
+      }
+
+      // Streamed reply (the normal case). Errors before the stream starts arrive as JSON below.
+      if (res.ok && (res.headers.get("content-type") ?? "").includes("text/event-stream")) {
+        try {
+          const result = await readStream(res, req.model, req.onDelta);
+          this.onWait(null);
+          return result;
+        } catch (err) {
+          if (req.signal.aborted) throw err;
+          if (timeout.aborted) throw timedOut();
+          throw err;
+        }
       }
 
       let data: OpenRouterResponse;
@@ -185,6 +200,72 @@ function rawDetail(data: OpenRouterResponse): string {
   if (raw === undefined || raw === null || raw === "") return "";
   const text = typeof raw === "string" ? raw : JSON.stringify(raw);
   return ` Provider said: ${text.slice(0, 200)}`;
+}
+
+interface StreamChunk extends OpenRouterResponse {
+  choices?: { delta?: { content?: string | null; reasoning?: string | null } }[] & OpenRouterResponse["choices"];
+}
+
+/** Reads OpenRouter's server-sent events: "data: {json}" lines, ":" keep-alive comments, "data: [DONE]". */
+async function readStream(
+  res: Response,
+  model: string,
+  onDelta?: (delta: { content?: string; reasoning?: string }) => void,
+): Promise<{ text: string; usage?: Usage; reasoning?: string }> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let reasoning = "";
+  let usage: Usage | undefined;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newline).replace(/\r$/, "");
+        buffer = buffer.slice(newline + 1);
+        if (!line.startsWith("data:")) continue; // blank lines and ": keep-alive" comments
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") return finish();
+        let chunk: StreamChunk;
+        try {
+          chunk = JSON.parse(payload) as StreamChunk;
+        } catch {
+          continue;
+        }
+        if (chunk.error) throw new Error(`OpenRouter (${model}): ${describeError(chunk, "error during streaming")}`);
+        const delta = chunk.choices?.[0]?.delta;
+        if (delta?.reasoning) {
+          reasoning += delta.reasoning;
+          onDelta?.({ reasoning: delta.reasoning });
+        }
+        if (delta?.content) {
+          text += delta.content;
+          onDelta?.({ content: delta.content });
+        }
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.prompt_tokens ?? 0,
+            completionTokens: chunk.usage.completion_tokens ?? 0,
+            ...(chunk.usage.cost !== undefined ? { costUsd: chunk.usage.cost } : {}),
+          };
+        }
+      }
+    }
+    return finish();
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+
+  function finish() {
+    const out: { text: string; usage?: Usage; reasoning?: string } = { text };
+    if (usage) out.usage = usage;
+    if (reasoning) out.reasoning = reasoning;
+    return out;
+  }
 }
 
 function describeError(data: OpenRouterResponse, fallback: string): string {

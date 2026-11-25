@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { AGENTS, getAgent } from "../agents/registry";
+import { CODE_AGENTS, customAgentId, getAgent, isPreset } from "../agents/registry";
+import type { HarnessConfig } from "../harness/config";
+import { PRESETS } from "../harness/presets";
 import type { Color, ReasoningEffort } from "../agents/types";
 import type { ModelInfo } from "../llm/models";
 import type { SideConfig as Side } from "./useGame";
@@ -12,10 +14,13 @@ interface Props {
   disabled: boolean;
   models: ModelInfo[] | null;
   freeOnly: boolean;
+  harnesses: HarnessConfig[];
   onChange: (v: Side) => void;
+  /** Open the harness editor: view a preset, edit a saved harness, or start a new one. */
+  onHarness: (action: "view" | "edit" | "new") => void;
 }
 
-export function SideConfig({ color, value, disabled, models, freeOnly, onChange }: Props) {
+export function SideConfig({ color, value, disabled, models, freeOnly, harnesses, onChange, onHarness }: Props) {
   const def = getAgent(value.agentId);
   const id = `side-${color}`;
   const modelId = value.model.trim();
@@ -43,13 +48,46 @@ export function SideConfig({ color, value, disabled, models, freeOnly, onChange 
       </legend>
       <label htmlFor={`${id}-agent`}>Agent</label>
       <select id={`${id}-agent`} value={value.agentId} onChange={(e) => onChange({ ...value, agentId: e.target.value })}>
-        {AGENTS.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.label}
-          </option>
-        ))}
+        <optgroup label="Presets">
+          {PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </optgroup>
+        {harnesses.length > 0 && (
+          <optgroup label="My harnesses">
+            {harnesses.map((h) => (
+              <option key={h.id} value={customAgentId(h.id)}>
+                {h.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <optgroup label="Other">
+          {CODE_AGENTS.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
+        </optgroup>
       </select>
       <p className="hint">{def.description}</p>
+      <div className="harness-actions">
+        {isPreset(value.agentId) && (
+          <button type="button" onClick={() => onHarness("view")}>
+            View / duplicate
+          </button>
+        )}
+        {value.agentId.startsWith("custom:") && (
+          <button type="button" onClick={() => onHarness("edit")}>
+            Edit harness
+          </button>
+        )}
+        <button type="button" onClick={() => onHarness("new")}>
+          + New harness
+        </button>
+      </div>
       {def.needsModel && (
         <>
           <label htmlFor={`${id}-model`}>Model {models && `(${choices.length} ${freeOnly ? "free" : "available"})`}</label>

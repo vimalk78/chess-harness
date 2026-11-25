@@ -138,4 +138,24 @@ describe("GameRunner", () => {
     await runner.start();
     expect(gameOver(events)).toMatchObject({ result: "*", reason: "stopped" });
   });
+
+  it("forwards live output tagged with the side to move", async () => {
+    const white: Agent = {
+      async nextMove(g) {
+        g.onStream?.({ start: true });
+        g.onStream?.({ content: "MOVE: e4" });
+        return { move: "e4", log: [] };
+      },
+    };
+    const streamed: unknown[] = [];
+    const runner = new GameRunner(
+      { white, black: scripted(["Ke5", "Ke5", "Ke5"]), onStream: (color, d) => streamed.push([color, d]) },
+      () => {},
+    );
+    await runner.start();
+    expect(streamed).toEqual([
+      ["w", { start: true }],
+      ["w", { content: "MOVE: e4" }],
+    ]);
+  });
 });

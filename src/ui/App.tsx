@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getAgent } from "../agents/registry";
+import { Chess } from "chess.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { agentExists, customAgentId, getAgent, harnessConfigFor } from "../agents/registry";
+import type { HarnessConfig, Validation } from "../harness/config";
+import { HARNESSED_PRESET } from "../harness/presets";
+import { harnessStore, newHarnessId, readShareFromHash } from "../harness/store";
+import { HarnessEditor } from "./HarnessEditor";
+import { useHarnesses } from "./useHarnesses";
 import type { Color } from "../agents/types";
 import { buildPgn } from "../game/pgn";
 import { AgentLog } from "./AgentLog";
@@ -21,6 +27,15 @@ const DEFAULT_SIDES: Record<Color, Side> = {
   w: { agentId: "harnessed", model: "google/gemma-4-26b-a4b-it:free", effort: "" },
   b: { agentId: "raw", model: "nvidia/nemotron-3-ultra-550b-a55b:free", effort: "" },
 };
+
+/** True for agents that call a model (everything except Human); safe for deleted harnesses. */
+function usesModel(agentId: string): boolean {
+  try {
+    return getAgent(agentId).needsModel;
+  } catch {
+    return true;
+  }
+}
 
 function loadSides(): Record<Color, Side> {
   try {
@@ -52,7 +67,50 @@ export default function App() {
   const keyRef = useRef(key);
   keyRef.current = key;
   const getKey = useCallback(() => keyRef.current, []);
-  const { state, rateWait, start, pause, resume, reset, humanMove, exportLog } = useGame(getKey);
+  const { state, live, rateWait, start, pause, resume, reset, humanMove, exportLog } = useGame(getKey);
+  const harnesses = useHarnesses();
+  const [editor, setEditor] = useState<{ color: Color; config: HarnessConfig; readOnly: boolean; isNew: boolean } | null>(null);
+  const [shared, setShared] = useState<Validation | null>(() => readShareFromHash(location.hash));
+  const [sharedAdded, setSharedAdded] = useState<string | null>(null);
+
+  // A side whose saved harness was deleted falls back to the Harnessed preset.
+  useEffect(() => {
+    setSides((s) => {
+      const fix = (side: Side): Side => (agentExists(side.agentId) ? side : { ...side, agentId: "harnessed" });
+      const w = fix(s.w);
+      const b = fix(s.b);
+      return w === s.w && b === s.b ? s : { w, b };
+    });
+  }, [harnesses]);
+
+  const clearShareHash = () => history.replaceState(null, "", location.pathname + location.search);
+  const addShared = () => {
+    if (!shared?.ok) return;
+    try {
+      const v = harnessStore.addCopy(shared.config);
+      setSharedAdded(v.ok ? v.config.name : null);
+    } catch {
+      setSharedAdded(null);
+    }
+    setShared(null);
+    clearShareHash();
+  };
+
+  const openHarness = (color: Color, action: "view" | "edit" | "new") => {
+    if (action === "new") {
+      const config: HarnessConfig = { ...HARNESSED_PRESET, id: newHarnessId(), name: "My harness", description: "" };
+      return setEditor({ color, config, readOnly: false, isNew: true });
+    }
+    const config = harnessConfigFor(sides[color].agentId);
+    if (config) setEditor({ color, config, readOnly: action === "view", isNew: false });
+  };
+
+  // The editor previews prompts in the current position (start position before a game).
+  const previewGame = useMemo(() => {
+    const chess = new Chess();
+    for (const san of state.history) chess.move(san);
+    return { history: state.history, fen: chess.fen(), legalMoves: chess.moves(), myColor: chess.turn(), previousAttempts: [] };
+  }, [state.history]);
 
   useEffect(() => {
     if (remember) localStorage.setItem(KEY_STORAGE, key);
@@ -103,25 +161,26 @@ export default function App() {
 
   const playing = state.status === "running" || state.status === "paused";
   const active = state.sides ?? sides;
-  const defs = { w: getAgent(sides.w.agentId), b: getAgent(sides.b.agentId) };
-  const needsKey = defs.w.needsModel || defs.b.needsModel;
+  const llm = { w: usesModel(sides.w.agentId), b: usesModel(sides.b.agentId) };
+  const needsKey = llm.w || llm.b;
 
   const startProblem =
-    !defs.w.needsModel && !defs.b.needsModel
+    !llm.w && !llm.b
       ? "Pick at least one LLM agent"
       : needsKey && !key.trim()
         ? "Enter your OpenRouter key"
-        : (defs.w.needsModel && !sides.w.model.trim()) || (defs.b.needsModel && !sides.b.model.trim())
+        : (llm.w && !sides.w.model.trim()) || (llm.b && !sides.b.model.trim())
           ? "Enter a model ID"
           : null;
 
-  const humanColors = (["w", "b"] as Color[]).filter((c) => !getAgent(active[c].agentId).needsModel);
+  const label = (c: Color) => state.labels?.[c] ?? sideLabel(active[c]);
+  const humanColors = (["w", "b"] as Color[]).filter((c) => !usesModel(active[c].agentId));
   const orientation = humanColors.length === 1 && humanColors[0] === "b" ? "black" : "white";
 
   const pgn = () =>
     buildPgn(state.history, {
-      white: sideLabel(active.w),
-      black: sideLabel(active.b),
+      white: label("w"),
+      black: label("b"),
       result: state.result ?? "*",
       termination: state.reason ?? undefined,
     });
@@ -150,6 +209,41 @@ export default function App() {
         </div>
       </header>
 
+      {shared && (
+        <div className={`banner ${shared.ok ? "" : "error"}`}>
+          {shared.ok ? (
+            <>
+              Shared harness <strong>{shared.config.name}</strong>
+              {shared.config.description ? `: ${shared.config.description}` : ""}
+              <span className="spacer" />
+              <button className="primary" onClick={addShared}>
+                Add to my harnesses
+              </button>
+            </>
+          ) : (
+            <>
+              Couldn't load the shared harness: {shared.error}
+              <span className="spacer" />
+            </>
+          )}
+          <button
+            onClick={() => {
+              setShared(null);
+              clearShareHash();
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {sharedAdded && (
+        <div className="banner">
+          Added <strong>{sharedAdded}</strong> to My harnesses. Pick it in a side's Agent menu.
+          <span className="spacer" />
+          <button onClick={() => setSharedAdded(null)}>OK</button>
+        </div>
+      )}
+
       <section className="setup">
         <KeyInput
           value={key}
@@ -162,18 +256,30 @@ export default function App() {
           onRememberChange={setRemember}
           onFreeOnlyChange={setFreeOnly}
         />
-        <SideConfig color="w" value={sides.w} disabled={playing} models={models} freeOnly={freeOnly} onChange={(v) => setSides((s) => ({ ...s, w: v }))} />
-        <SideConfig color="b" value={sides.b} disabled={playing} models={models} freeOnly={freeOnly} onChange={(v) => setSides((s) => ({ ...s, b: v }))} />
+        {(["w", "b"] as Color[]).map((c) => (
+          <SideConfig
+            key={c}
+            color={c}
+            value={sides[c]}
+            disabled={playing}
+            models={models}
+            freeOnly={freeOnly}
+            harnesses={harnesses}
+            onChange={(v) => setSides((s) => ({ ...s, [c]: v }))}
+            onHarness={(action) => openHarness(c, action)}
+          />
+        ))}
         {modelsError && <p className="hint">Couldn't load OpenRouter's model list ({modelsError}); you can still type any model ID.</p>}
       </section>
 
       <main className="arena">
         <AgentLog
           color="w"
-          title={sideLabel(active.w)}
+          title={label("w")}
           entries={state.logs.w}
+          live={live.w}
           thinkingSince={state.thinking?.color === "w" ? state.thinking.since : null}
-          isHuman={!getAgent(active.w.agentId).needsModel}
+          isHuman={!usesModel(active.w.agentId)}
           now={now}
         />
 
@@ -221,13 +327,36 @@ export default function App() {
 
         <AgentLog
           color="b"
-          title={sideLabel(active.b)}
+          title={label("b")}
           entries={state.logs.b}
+          live={live.b}
           thinkingSince={state.thinking?.color === "b" ? state.thinking.since : null}
-          isHuman={!getAgent(active.b.agentId).needsModel}
+          isHuman={!usesModel(active.b.agentId)}
           now={now}
         />
       </main>
+
+      {editor && (
+        <HarnessEditor
+          key={`${editor.config.id}-${editor.readOnly}`}
+          initial={editor.config}
+          readOnly={editor.readOnly}
+          isNew={editor.isNew}
+          previewGame={previewGame}
+          onClose={() => setEditor(null)}
+          onSaved={(config) => {
+            setSides((s) => ({ ...s, [editor.color]: { ...s[editor.color], agentId: customAgentId(config.id) } }));
+            setEditor({ color: editor.color, config, readOnly: false, isNew: false });
+          }}
+          onDeleted={(id) => {
+            setSides((s) => {
+              const fix = (side: Side): Side => (side.agentId === customAgentId(id) ? { ...side, agentId: "harnessed" } : side);
+              return { w: fix(s.w), b: fix(s.b) };
+            });
+            setEditor(null);
+          }}
+        />
+      )}
 
       <footer>
         The referee only enforces the rules. No chess engine picks or suggests moves for any agent.

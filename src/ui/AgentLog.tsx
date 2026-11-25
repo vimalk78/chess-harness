@@ -1,22 +1,24 @@
 import { useEffect, useRef } from "react";
 import type { Color } from "../agents/types";
-import type { PanelEntry } from "./useGame";
+import type { LiveOutput, PanelEntry } from "./useGame";
 
 interface Props {
   color: Color;
   title: string;
   entries: PanelEntry[];
+  /** Model output streaming in right now, if any. */
+  live?: LiveOutput | null;
   thinkingSince: number | null;
   isHuman: boolean;
   now: number;
 }
 
-export function AgentLog({ color, title, entries, thinkingSince, isHuman, now }: Props) {
+export function AgentLog({ color, title, entries, live, thinkingSince, isHuman, now }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [entries.length]);
+  }, [entries.length, live?.text.length, live?.reasoning.length]);
 
   let prompt = 0;
   let completion = 0;
@@ -60,12 +62,19 @@ export function AgentLog({ color, title, entries, thinkingSince, isHuman, now }:
         )}
       </header>
       <div className="log" ref={listRef}>
-        {entries.length === 0 && (
+        {entries.length === 0 && !(live && (live.reasoning || live.text)) && (
           <p className="empty">{isHuman ? "Your moves will appear here." : "Prompts and replies will appear here."}</p>
         )}
         {entries.map((e, i) => (
           <Entry key={i} entry={e} />
         ))}
+        {live && (live.reasoning || live.text) && (
+          <div className="entry live">
+            <div className="live-label">Live</div>
+            {live.reasoning && <pre className="live-reasoning">{live.reasoning}</pre>}
+            {live.text && <pre>{live.text}</pre>}
+          </div>
+        )}
       </div>
     </section>
   );

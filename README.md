@@ -45,51 +45,73 @@ Free models are limited to **20 requests/minute** and **50 requests/day** (1000/
 
 A full game usually takes 80–200 requests, so on 50/day expect part of a game per day. Human vs LLM uses about half as many.
 
-## Built-in agents
+## Harnesses
 
-| Agent | What the model gets each turn | What happens with its reply |
+A **harness** decides what the model sees each turn and what happens to its answer. Three presets come built in, and you can build your own in the browser, with no code:
+
+| Preset | What the model gets each turn | What happens with its reply |
 |---|---|---|
-| **Raw** | "You are playing White. The game so far in PGN: … Reply with only your next move." No board, no legal moves. | The first move-shaped word is sent to the referee unchecked. A rejected move comes back as one bare line: "Your move X was rejected: … Try again." |
-| **Harnessed** | System prompt with a procedure (threats → candidates → safety check → `MOVE: <san>`), plus FEN, an ASCII board, the move history and the full legal-move list. | Checks the move itself, re-asks up to 2 times quoting the exact problem, and as a last resort plays a random legal move (noted in the log). |
-| **Harnessed + tactical facts** | Everything in Harnessed, plus a "Board facts" block computed from the rules each turn: which pieces are attacked and by what, which are undefended, every capture (and what it takes), every checking move. | Same as Harnessed. The facts use no evaluation, search or piece values; the model still decides what matters. |
-| **Human** | – | You drag pieces on the board. |
+| **Raw** | "You are playing White. The game so far in PGN: … Reply with only your next move." No board, no legal moves. | Sent to the referee unchecked. A rejected move comes back as one bare line: "Your move X was rejected: … Try again." |
+| **Harnessed** | A system prompt with a procedure (threats → opportunities → loose pieces → candidates → safety → `MOVE: <san>`), plus FEN, an ASCII board, the moves so far and the legal-move list. | Pre-checked against the rules, re-asked up to 2 times with the exact problem, and as a last resort a random legal move (noted in the log). |
+| **Harnessed + tactical facts** | Everything in Harnessed, plus attacked/undefended pieces, every capture and every check, computed from the rules. | Same as Harnessed. |
 
-Both LLM agents work with any OpenRouter model ID, and each side has its own model and reasoning-effort setting, so you can test the same model with and without a harness, or a cheap model with a harness against an expensive one without.
+**Human** is also available on either side: you drag pieces on the board.
 
-**Referee rules:** a move can be SAN (`Nf3`) or UCI (`g1f3`). Three rejected moves in one turn forfeits the game. API errors (bad key, no credit, rate limits) pause the game instead of counting against the agent, and Resume replays the turn. A game is a draw after 300 half-moves.
+### Build your own
 
-Every prompt, reply, token count and cost is shown in the side panels, along with the model's reasoning when OpenRouter returns it. You can copy the PGN or download the full log as JSON.
+Click **View / duplicate** on a preset (or **+ New harness**) to open the editor. You can change:
 
-## Write your own harness
+- **System prompt** (optional), **turn prompt** (sent every turn) and **re-ask prompt** (sent after a failed pre-check).
+- **Pre-check moves before submitting**: the harness checks the model's move with the rules and re-asks before the referee sees it, then either plays a random legal move or submits the last answer anyway.
 
-Add a file to `src/agents/` that exports an `AgentDefinition`, then add it to the list in `src/agents/registry.ts`. Your agent can make as many LLM calls as it likes and use `chess.js`; whatever it puts in `log` shows up in its panel.
+Prompts are templates. Write a `{{variable}}` wherever you want game information to appear; it's filled in fresh every turn:
+
+| Game | Context blocks (computed from the rules before each call) |
+|---|---|
+| `{{side}}` `{{opponent}}` `{{fen}}` `{{pgn}}` `{{move_number}}` `{{last_move}}` `{{errors}}` (referee rejections this turn) `{{problem}}` (re-ask only) | `{{board_ascii}}` `{{board_unicode}}` `{{pieces}}` `{{legal_moves}}` `{{legal_moves_by_piece}}` `{{last_move_threats}}` `{{attacks}}` `{{captures}}` `{{checks}}` `{{material}}` `{{game_state}}` `{{move_safety}}` (borderline: looks one move ahead) |
+
+The editor's **Preview** tab shows the exact prompt the model would receive in the current position. Harnesses are saved in your browser; you can export/import them as JSON or **copy a share link** (the harness travels in the URL, nothing goes to a server).
+
+Context blocks are facts, not advice: no engine, no evaluation, no search, no opening books or tablebases. The model never calls them; the harness computes them before each call. (Tools the model calls itself may come later.)
+
+### Rules and transparency
+
+- **The referee** (chess.js) is the only judge of legality, the same for both sides. Moves can be SAN (`Nf3`) or UCI (`g1f3`). Three rejected moves in one turn forfeits the game. A game is a draw after 300 half-moves.
+- API errors (bad key, no credit, rate limits) pause the game instead of counting against the agent; Resume replays the turn.
+- Model output **streams live** into the side panels, reasoning included when OpenRouter returns it. Every prompt, reply, token count and cost is kept. The downloaded JSON log includes both sides' full harness configs.
+
+## Code-level agents
+
+For anything a harness config can't express (several calls per move, voting, critique loops), write an agent in code: add a file to `src/agents/` that exports an `AgentDefinition`, then add it to `CODE_AGENTS` in `src/agents/registry.ts`.
 
 ```ts
-// src/agents/vote.ts: ask 3 times, play the most common legal answer
+// src/agents/vote.ts: ask 3 times with the Harnessed prompts, play the most common legal answer
+import { HARNESSED_PRESET } from "../harness/presets";
+import { renderPrompts } from "../harness/runner";
 import { legalSan } from "./chessUtil";
-import { buildUserPrompt, SYSTEM_PROMPT } from "./harnessed";
 import { extractMove } from "./parse";
 import type { AgentDefinition, LogEntry } from "./types";
 
 export const voteAgent: AgentDefinition = {
   id: "vote",
   label: "Majority vote ×3",
-  description: "Harnessed prompt, sampled 3 times; the most common legal move wins.",
+  description: "Harnessed prompts, sampled 3 times; the most common legal move wins.",
   needsModel: true,
   create(settings, { llm }) {
     return {
       async nextMove(game) {
+        const { system, user } = renderPrompts(HARNESSED_PRESET, game);
         const messages = [
-          { role: "system" as const, content: SYSTEM_PROMPT },
-          { role: "user" as const, content: buildUserPrompt(game) },
+          { role: "system" as const, content: system },
+          { role: "user" as const, content: user },
         ];
-        const log: LogEntry[] = [{ kind: "prompt", text: messages[1].content }];
+        const log: LogEntry[] = [{ kind: "prompt", text: user }];
         const replies = await Promise.all(
           [1, 2, 3].map(() => llm.chat({ model: settings.model, messages, reasoningEffort: settings.reasoningEffort, signal: game.signal })),
         );
         const votes = new Map<string, number>();
         for (const r of replies) {
-          log.push({ kind: "response", text: r.text, usage: r.usage });
+          log.push({ kind: "response", text: r.text, usage: r.usage, reasoning: r.reasoning });
           const m = extractMove(r.text);
           const san = m && legalSan(game.fen, m);
           if (san) votes.set(san, (votes.get(san) ?? 0) + 1);
@@ -113,15 +135,17 @@ interface GameView {
   myColor: "w" | "b";
   previousAttempts: { move: string; error: string }[]; // moves the referee rejected this turn
   signal: AbortSignal;        // pass to LLM calls so Pause/Stop can cancel them
+  onStream?: (delta: { start?: boolean; content?: string; reasoning?: string }) => void; // live output for the UI
 }
 ```
 
-**Keeping it fair:** if your harness calls a chess engine, evaluates positions or uses an opening book, it's no longer testing the model. Say so if you share results.
+**Keeping it fair:** if your agent calls a chess engine, evaluates positions or uses an opening book, it's no longer testing the model. Say so if you share results.
 
 ## Layout
 
 ```
-src/agents/   Agent interface, built-in agents, move parser, registry
+src/agents/   Agent interface, registry, Human agent, move parser
+src/harness/  Harness configs, presets, runner, template variables, context blocks, saving/sharing
 src/game/     Referee (turn loop, legality, forfeits, pause) and PGN
 src/llm/      OpenRouter client
 src/ui/       React components and the useGame hook

@@ -12,6 +12,14 @@ export interface GameView {
   previousAttempts: { move: string; error: string }[];
   /** Fires on pause/stop; agents must pass it to fetch */
   signal: AbortSignal;
+  /** Live model output for the UI. Send { start: true } before each model call. */
+  onStream?: (delta: StreamDelta) => void;
+}
+
+export interface StreamDelta {
+  start?: boolean;
+  content?: string;
+  reasoning?: string;
 }
 
 export interface Usage {
@@ -53,6 +61,8 @@ export interface LlmClient {
     messages: ChatMessage[];
     reasoningEffort?: ReasoningEffort;
     signal: AbortSignal;
+    /** Called with each streamed piece of reply or reasoning text. */
+    onDelta?: (delta: { content?: string; reasoning?: string }) => void;
   }): Promise<{ text: string; usage?: Usage; reasoning?: string }>;
 }
 
