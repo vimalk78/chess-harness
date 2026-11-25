@@ -7,6 +7,7 @@ import { Board } from "./Board";
 import { KeyInput } from "./KeyInput";
 import { MoveList } from "./MoveList";
 import { SideConfig } from "./SideConfig";
+import { withFreeModels } from "./sides";
 import { fetchFreeQuota, fetchModels, type FreeQuota, type ModelInfo } from "../llm/models";
 import { sideLabel, useGame, type SideConfig as Side } from "./useGame";
 
@@ -44,6 +45,7 @@ export default function App() {
   const [models, setModels] = useState<ModelInfo[] | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [freeOnly, setFreeOnly] = useState(() => localStorage.getItem(FREE_ONLY_STORAGE) !== "false");
+  const freeOnlyAtLoad = useRef(freeOnly);
   const [quota, setQuota] = useState<FreeQuota | null>(null);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
@@ -62,7 +64,11 @@ export default function App() {
 
   useEffect(() => {
     fetchModels()
-      .then(setModels)
+      .then((list) => {
+        setModels(list);
+        // Settings saved from an earlier visit may name paid models; swap those for free ones.
+        if (freeOnlyAtLoad.current) setSides((s) => withFreeModels(s, list, DEFAULT_SIDES));
+      })
       .catch((e: Error) => setModelsError(e.message));
   }, []);
 
