@@ -39,7 +39,7 @@ To update the site, run `npm run build` again. To take it down, run `tailscale f
 
 ## Free OpenRouter accounts
 
-The app loads OpenRouter's live model list. "Show free models only" is on by default, and the default matchup uses two free models: a small one with the harness (`google/gemma-4-26b-a4b-it:free`) against a much larger one without it (`nvidia/nemotron-3-ultra-550b-a55b:free`).
+The app loads OpenRouter's live model list. "Show free models only" is on by default, and the default matchup uses two free NVIDIA models: a small one with the harness (`nvidia/nemotron-3.5-lightning:free`, 3B active parameters) against an 18x larger one without it (`nvidia/nemotron-3-ultra-550b-a55b:free`, 55B active). Google's free Gemma models are avoided as defaults because they're often rate-limited by their provider.
 
 Free models are limited to **20 requests/minute** and **50 requests/day** (1000/day once you've bought $10 of credits). The app spaces calls out to stay under the per-minute limit and retries if it gets a 429 anyway. When the daily limit is reached, the game pauses with a message; Resume continues it the next day (keep the tab open, or note the PGN). Requests used today are shown under the key field.
 

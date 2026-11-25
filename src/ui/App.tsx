@@ -13,7 +13,7 @@ import { Board } from "./Board";
 import { KeyInput } from "./KeyInput";
 import { MoveList } from "./MoveList";
 import { SideConfig } from "./SideConfig";
-import { withFreeModels } from "./sides";
+import { FREE_MODEL_PREFERENCES, withFreeModels } from "./sides";
 import { fetchFreeQuota, fetchModels, type FreeQuota, type ModelInfo } from "../llm/models";
 import { sideLabel, useGame, type SideConfig as Side } from "./useGame";
 
@@ -23,9 +23,9 @@ const FREE_ONLY_STORAGE = "arena.freeOnly";
 
 const DEFAULT_SIDES: Record<Color, Side> = {
   // Free models, so the defaults work on a free OpenRouter account:
-  // a small model with the harness vs a much larger model without it.
-  w: { agentId: "harnessed", model: "google/gemma-4-26b-a4b-it:free", effort: "" },
-  b: { agentId: "raw", model: "nvidia/nemotron-3-ultra-550b-a55b:free", effort: "" },
+  // a small model with the harness vs a much larger model without it (see sides.ts).
+  w: { agentId: "harnessed", model: FREE_MODEL_PREFERENCES.w[0], effort: "" },
+  b: { agentId: "raw", model: FREE_MODEL_PREFERENCES.b[0], effort: "" },
 };
 
 /** True for agents that call a model (everything except Human); safe for deleted harnesses. */
@@ -43,6 +43,10 @@ function loadSides(): Record<Color, Side> {
     if (saved?.w && saved?.b) {
       getAgent(saved.w.agentId);
       getAgent(saved.b.agentId);
+      // One-time update: White was saved with the old default (often rate-limited) Gemma model.
+      if (saved.w.agentId === "harnessed" && saved.w.model === "google/gemma-4-26b-a4b-it:free") {
+        saved.w = { ...saved.w, model: DEFAULT_SIDES.w.model };
+      }
       return saved;
     }
   } catch {
@@ -125,7 +129,7 @@ export default function App() {
       .then((list) => {
         setModels(list);
         // Settings saved from an earlier visit may name paid models; swap those for free ones.
-        if (freeOnlyAtLoad.current) setSides((s) => withFreeModels(s, list, DEFAULT_SIDES));
+        if (freeOnlyAtLoad.current) setSides((s) => withFreeModels(s, list));
       })
       .catch((e: Error) => setModelsError(e.message));
   }, []);
