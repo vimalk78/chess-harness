@@ -45,7 +45,7 @@ describe("OpenRouterClient", () => {
   it("throws with OpenRouter's error message on non-2xx", async () => {
     const client = new OpenRouterClient(() => "k", mockFetch(402, { error: { message: "Insufficient credits" } }));
     await expect(client.chat({ model: "m", messages: [], signal: new AbortController().signal })).rejects.toThrow(
-      "OpenRouter 402: Insufficient credits",
+      "OpenRouter 402 (m): Insufficient credits",
     );
   });
 

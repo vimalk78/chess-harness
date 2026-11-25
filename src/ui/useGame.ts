@@ -57,7 +57,10 @@ export function useGame(getKey: () => string) {
   const eventsRef = useRef<{ t: number; event: GameEvent }[]>([]);
   // One client for the whole session, so the free-model rate limiter spans both sides and every game.
   const llmRef = useRef<OpenRouterClient | null>(null);
-  llmRef.current ??= new OpenRouterClient(getKey);
+  const [rateWait, setRateWait] = useState<{ model: string; until: number; reason: string } | null>(null);
+  llmRef.current ??= new OpenRouterClient(getKey, undefined, {
+    onWait: (w) => setRateWait(w ? { model: w.model, until: Date.now() + w.waitMs, reason: w.reason } : null),
+  });
 
   const start = useCallback(
     (sides: Record<Color, SideConfig>) => {
@@ -117,7 +120,9 @@ export function useGame(getKey: () => string) {
 
   const exportLog = useCallback(() => ({ sides: state.sides, result: state.result, reason: state.reason, history: state.history, events: eventsRef.current }), [state]);
 
-  return { state, start, pause, resume, reset, humanMove, exportLog };
+  // A wait only matters while the game is running.
+  const visibleWait = state.status === "running" ? rateWait : null;
+  return { state, rateWait: visibleWait, start, pause, resume, reset, humanMove, exportLog };
 }
 
 function reduce(s: GameState, e: GameEvent): GameState {

@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { AGENTS, getAgent } from "../agents/registry";
 import type { Color, ReasoningEffort } from "../agents/types";
 import type { ModelInfo } from "../llm/models";
 import type { SideConfig as Side } from "./useGame";
+
+const OTHER = "__other__";
 
 interface Props {
   color: Color;
@@ -16,6 +19,12 @@ export function SideConfig({ color, value, disabled, models, freeOnly, onChange 
   const def = getAgent(value.agentId);
   const id = `side-${color}`;
   const modelId = value.model.trim();
+  const choices = (models ?? []).filter((m) => !freeOnly || m.free);
+  const inList = choices.some((m) => m.id === modelId);
+  const [typing, setTyping] = useState(false);
+  // Free text when the list didn't load, when the user picked "Other", or when the saved ID isn't offered.
+  const showInput = !models || typing || (modelId !== "" && !inList);
+
   const known = models?.find((m) => m.id === modelId);
   const warning =
     !models || !modelId
@@ -43,16 +52,41 @@ export function SideConfig({ color, value, disabled, models, freeOnly, onChange 
       <p className="hint">{def.description}</p>
       {def.needsModel && (
         <>
-          <label htmlFor={`${id}-model`}>OpenRouter model ID</label>
-          <input
-            id={`${id}-model`}
-            list="model-suggestions"
-            value={value.model}
-            placeholder={freeOnly ? "pick a :free model" : "e.g. anthropic/claude-haiku-5.5"}
-            spellCheck={false}
-            onChange={(e) => onChange({ ...value, model: e.target.value })}
-          />
-          {known && <p className="hint">{known.name}</p>}
+          <label htmlFor={`${id}-model`}>Model {models && `(${choices.length} ${freeOnly ? "free" : "available"})`}</label>
+          {models && (
+            <select
+              id={`${id}-model`}
+              value={showInput ? OTHER : modelId}
+              onChange={(e) => {
+                if (e.target.value === OTHER) {
+                  setTyping(true);
+                } else {
+                  setTyping(false);
+                  onChange({ ...value, model: e.target.value });
+                }
+              }}
+            >
+              {!modelId && !showInput && <option value="">Choose a model…</option>}
+              {choices.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                  {m.reasoning ? " · reasoning" : ""}
+                </option>
+              ))}
+              <option value={OTHER}>Other model ID…</option>
+            </select>
+          )}
+          {showInput && (
+            <input
+              id={models ? `${id}-model-id` : `${id}-model`}
+              aria-label="OpenRouter model ID"
+              value={value.model}
+              placeholder={freeOnly ? "e.g. vendor/model-name:free" : "e.g. anthropic/claude-haiku-5.5"}
+              spellCheck={false}
+              onChange={(e) => onChange({ ...value, model: e.target.value })}
+            />
+          )}
+          <p className="hint mono">{modelId || "no model selected"}</p>
           {warning && <p className="hint warn">{warning}</p>}
           <label htmlFor={`${id}-effort`}>Reasoning effort</label>
           <select

@@ -52,7 +52,7 @@ export default function App() {
   const keyRef = useRef(key);
   keyRef.current = key;
   const getKey = useCallback(() => keyRef.current, []);
-  const { state, start, pause, resume, reset, humanMove, exportLog } = useGame(getKey);
+  const { state, rateWait, start, pause, resume, reset, humanMove, exportLog } = useGame(getKey);
 
   useEffect(() => {
     if (remember) localStorage.setItem(KEY_STORAGE, key);
@@ -164,13 +164,6 @@ export default function App() {
         />
         <SideConfig color="w" value={sides.w} disabled={playing} models={models} freeOnly={freeOnly} onChange={(v) => setSides((s) => ({ ...s, w: v }))} />
         <SideConfig color="b" value={sides.b} disabled={playing} models={models} freeOnly={freeOnly} onChange={(v) => setSides((s) => ({ ...s, b: v }))} />
-        <datalist id="model-suggestions">
-          {(models ?? [])
-            .filter((m) => !freeOnly || m.free)
-            .map((m) => (
-              <option key={m.id} value={m.id} label={m.name} />
-            ))}
-        </datalist>
         {modelsError && <p className="hint">Couldn't load OpenRouter's model list ({modelsError}); you can still type any model ID.</p>}
       </section>
 
@@ -206,7 +199,7 @@ export default function App() {
             {startProblem && !playing && <span className="hint">{startProblem}</span>}
           </div>
 
-          <Status state={state} />
+          <Status state={state} rateWait={rateWait} now={now} />
 
           <Board
             fen={state.fen}
@@ -243,7 +236,7 @@ export default function App() {
   );
 }
 
-function Status({ state }: { state: ReturnType<typeof useGame>["state"] }) {
+function Status({ state, rateWait, now }: Pick<ReturnType<typeof useGame>, "state" | "rateWait"> & { now: number }) {
   if (state.status === "over") {
     const who = state.result === "1-0" ? "White wins" : state.result === "0-1" ? "Black wins" : state.result === "*" ? "Game stopped" : "Draw";
     return (
@@ -260,6 +253,14 @@ function Status({ state }: { state: ReturnType<typeof useGame>["state"] }) {
     );
   }
   if (state.humanToMove) return <div className="status">Your move: drag a piece.</div>;
+  if (rateWait) {
+    const secs = Math.max(0, Math.ceil((rateWait.until - now) / 1000));
+    return (
+      <div className="status waiting">
+        {rateWait.model} is {rateWait.reason}. Retrying in {secs}s…
+      </div>
+    );
+  }
   if (state.thinking) return <div className="status">{state.thinking.color === "w" ? "White" : "Black"} is thinking…</div>;
   return <div className="status muted">Pick two agents and press Start.</div>;
 }

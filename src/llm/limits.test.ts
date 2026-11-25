@@ -57,6 +57,38 @@ describe("OpenRouterClient rate limits", () => {
     expect(sleep.mock.calls.map((c) => (c as unknown[])[0])).toEqual([5000, 10000, 20000, 40000]);
   });
 
+  it("waits longer when the model's provider is overloaded, reporting each wait", async () => {
+    const upstream = () =>
+      json(429, { error: { message: "Provider returned error", metadata: { provider_name: "Google AI Studio", raw: "gemma is temporarily rate-limited upstream" } } });
+    const responses = [upstream(), upstream(), json(200, okBody)];
+    const sleep = vi.fn(async () => {});
+    const waits: unknown[] = [];
+    const client = new OpenRouterClient(() => "k", async () => responses.shift()!, {
+      freeLimiter: noLimit,
+      sleep,
+      onWait: (w) => waits.push(w),
+    });
+    const res = await client.chat({ model: "google/gemma-4-26b-a4b-it:free", messages: [], signal: signal() });
+    expect(res.text).toBe("e4");
+    expect(sleep.mock.calls.map((c) => (c as unknown[])[0])).toEqual([10000, 20000]);
+    expect(waits).toEqual([
+      { model: "google/gemma-4-26b-a4b-it:free", waitMs: 10000, reason: "rate-limited by its provider (Google AI Studio)" },
+      { model: "google/gemma-4-26b-a4b-it:free", waitMs: 20000, reason: "rate-limited by its provider (Google AI Studio)" },
+      null,
+    ]);
+  });
+
+  it("gives up on a busy provider with a message naming the model and provider", async () => {
+    const client = new OpenRouterClient(
+      () => "k",
+      async () => json(429, { error: { message: "Provider returned error", metadata: { provider_name: "Nvidia", raw: "busy" } } }),
+      { freeLimiter: noLimit, sleep: async () => {} },
+    );
+    await expect(client.chat({ model: "nvidia/x:free", messages: [], signal: signal() })).rejects.toThrow(
+      /nvidia\/x:free is rate-limited by its provider \(Nvidia\).*7 tries.*isn't your account limit.*Provider said: busy/,
+    );
+  });
+
   it("stops immediately on the daily free limit with a useful message", async () => {
     const now = Date.UTC(2026, 10, 26, 15, 0);
     const reset = Date.UTC(2026, 10, 27, 0, 0);

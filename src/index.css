@@ -88,6 +88,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .hint a { color: var(--accent); }
 .hint.warn, .quota.low { color: var(--bad); }
 .quota { margin: 2px 0 0; font-size: 0.85rem; }
+.hint.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.75rem; overflow-wrap: anywhere; }
 
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--muted); }
 .dot-w { background: var(--white-dot); }
@@ -112,6 +113,7 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .status.muted { color: var(--muted); }
 .status.error { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
 .status.over { border-color: var(--accent); }
+.status.waiting { background: var(--note-bg); }
 
 .board { width: 100%; aspect-ratio: 1; }
 
