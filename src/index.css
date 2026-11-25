@@ -193,6 +193,9 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .entry.turn { font-weight: 600; border-top: 1px dashed var(--border); padding-top: 6px; }
 
 footer { margin-top: 20px; color: var(--muted); font-size: 0.82rem; text-align: center; }
+footer .usage { margin: 6px 0 0; }
+footer .usage a { color: var(--accent); }
+footer .usage strong { color: var(--text); font-weight: 600; }
 
 @media (max-width: 1100px) {
   .setup { grid-template-columns: 1fr 1fr; }

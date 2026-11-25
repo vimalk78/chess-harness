@@ -8,6 +8,7 @@ import type { AgentDeps, Color, GameView, LogEntry, ReasoningEffort, StreamDelta
 import type { HarnessConfig } from "../harness/config";
 import { GameRunner, type GameEvent, type GameResult } from "../game/referee";
 import { OpenRouterClient } from "../llm/openrouter";
+import { countEvent } from "../analytics";
 
 export interface SideConfig {
   agentId: string;
@@ -123,6 +124,8 @@ export function useGame(getKey: () => string) {
           deps,
         );
 
+      const humans = (["w", "b"] as Color[]).filter((c) => !getAgent(sides[c].agentId).needsModel).length;
+      const mode = humans ? "human vs LLM" : "LLM vs LLM";
       const onStream = (color: Color, d: StreamDelta) => {
         if (runnerRef.current !== runner) return;
         if (d.start || !liveBuf.current[color]) liveBuf.current[color] = { reasoning: "", text: "" };
@@ -136,10 +139,12 @@ export function useGame(getKey: () => string) {
         eventsRef.current.push({ t: Date.now(), event });
         if (event.type === "log" || event.type === "turnStart") clearLive(event.color);
         if (event.type === "paused" || event.type === "gameOver") clearLive();
+        if (event.type === "gameOver" && event.result !== "*") countEvent("game-finish", mode);
         setState((s) => reduce(s, event));
       });
       runnerRef.current = runner;
       clearLive();
+      countEvent("game-start", mode);
       setState({
         ...initialState,
         status: "running",
