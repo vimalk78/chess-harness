@@ -73,7 +73,7 @@ Syntax: `{{name}}`, whitespace inside the braces allowed. No conditionals or loo
 | `{{pieces}}` | `White: Kg1, Qd1, Ra1, … / Black: …` | rules |
 | `{{legal_moves}}` | Comma-separated SAN list | rules |
 | `{{legal_moves_by_piece}}` | One line per piece: `Knight f3: Ne5, Nd4, Ng5` | rules |
-| `{{last_move_threats}}` | What the opponent's last-moved piece now attacks, and whether it gives check | rules |
+| `{{last_move_threats}}` | Your pieces that are attacked now but weren't before the opponent's last move (so discovered attacks count too), and whether you're in check | rules |
 | `{{attacks}}` | Attacked pieces of both sides with attackers and defenders; undefended ones flagged (existing `tactics.ts` logic) | rules |
 | `{{captures}}` | `Nxd8 (takes queen), …` or `none` | rules |
 | `{{checks}}` | Moves that give check, or `none` | rules |
@@ -85,7 +85,7 @@ Excluded on principle: engine evaluations, search, opening books, endgame tableb
 
 ## Presets
 
-They reproduce today's built-in agents exactly. A parity test checks that each preset sends the same messages as the current code for the same position.
+They reproduce today's built-in agents. A parity test checks that each preset sends the same information as the current code for the same position (wording may differ trivially, e.g. the empty-history placeholder).
 
 - **Raw**: no system prompt. Turn prompt: `You are playing chess as {{side}}. The game so far in PGN: {{pgn}}\nReply with only your next move in standard algebraic notation.{{errors}}` (each `{{errors}}` line starts with a newline). Pre-check off.
 - **Harnessed**: today's `SYSTEM_PROMPT`. Turn prompt: side, `{{fen}}`, `{{board_ascii}}`, `{{pgn}}`, `{{legal_moves}}`. Re-ask: `{{problem}} Choose one move from this list and end with "MOVE: <san>": {{legal_moves}}`. Pre-check on, 2 re-asks, fallback random.
