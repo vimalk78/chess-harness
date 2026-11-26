@@ -24,6 +24,17 @@ describe("RateLimiter", () => {
     await lim.acquire(signal());
     expect(sleeps).toEqual([850]); // until t=1000 (+50ms margin)
   });
+
+  it("reports how long it will wait", async () => {
+    let t = 0;
+    const lim = new RateLimiter(1, 1000, () => t, async (ms) => {
+      t += ms;
+    });
+    const waits: number[] = [];
+    await lim.acquire(signal(), (ms) => waits.push(ms));
+    await lim.acquire(signal(), (ms) => waits.push(ms));
+    expect(waits).toEqual([1050]);
+  });
 });
 
 describe("OpenRouterClient rate limits", () => {
@@ -36,6 +47,21 @@ describe("OpenRouterClient rate limits", () => {
     await client.chat({ model: "google/gemma-4-31b-it:free", messages: [], signal: signal() });
     await client.chat({ model: "anthropic/claude-haiku-5.5", messages: [], signal: signal() });
     expect(acquire).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the app's own pacing of free models as a wait", async () => {
+    let t = 0;
+    const lim = new RateLimiter(1, 60_000, () => t, async (ms) => {
+      t += ms;
+    });
+    const waits: unknown[] = [];
+    const client = new OpenRouterClient(() => "k", async () => json(200, okBody), { freeLimiter: lim, onWait: (w) => waits.push(w) });
+    await client.chat({ model: "m:free", messages: [], signal: signal() });
+    expect(waits).toEqual([null]);
+    waits.length = 0;
+    await client.chat({ model: "m:free", messages: [], signal: signal() });
+    expect(waits[0]).toMatchObject({ model: "m:free", waitMs: 60_050, reason: expect.stringMatching(/20 a minute/) });
+    expect(waits[1]).toBeNull();
   });
 
   it("waits and retries on a per-minute 429", async () => {
@@ -71,11 +97,9 @@ describe("OpenRouterClient rate limits", () => {
     const res = await client.chat({ model: "google/gemma-4-26b-a4b-it:free", messages: [], signal: signal() });
     expect(res.text).toBe("e4");
     expect(sleep.mock.calls.map((c) => (c as unknown[])[0])).toEqual([10000, 20000]);
-    expect(waits).toEqual([
-      { model: "google/gemma-4-26b-a4b-it:free", waitMs: 10000, reason: "rate-limited by its provider (Google AI Studio)" },
-      { model: "google/gemma-4-26b-a4b-it:free", waitMs: 20000, reason: "rate-limited by its provider (Google AI Studio)" },
-      null,
-    ]);
+    // Each wait ends (null) as soon as the retry request goes out, not when its reply arrives.
+    const w = (waitMs: number) => ({ model: "google/gemma-4-26b-a4b-it:free", waitMs, reason: "rate-limited by its provider (Google AI Studio)" });
+    expect(waits).toEqual([w(10000), null, w(20000), null, null]);
   });
 
   it("gives up on a busy provider with a message naming the model and provider", async () => {

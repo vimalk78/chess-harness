@@ -128,9 +128,25 @@ export function useGame(getKey: () => string) {
   );
   // One client for the whole session, so the free-model rate limiter spans both sides and every game.
   const llmRef = useRef<OpenRouterClient | null>(null);
-  const [rateWait, setRateWait] = useState<{ model: string; until: number; reason: string } | null>(null);
+  const [rateWait, setRateWait] = useState<{ model: string; since: number; until: number; reason: string } | null>(null);
+  // When the current rate-limit wait began; waits don't count toward the side's thinking time.
+  const waitStart = useRef<number | null>(null);
   llmRef.current ??= new OpenRouterClient(getKey, undefined, {
-    onWait: (w) => setRateWait(w ? { model: w.model, until: Date.now() + w.waitMs, reason: w.reason } : null),
+    onWait: (w) => {
+      const now = Date.now();
+      if (w) {
+        waitStart.current ??= now;
+        setRateWait({ model: w.model, since: waitStart.current, until: now + w.waitMs, reason: w.reason });
+        return;
+      }
+      const began = waitStart.current;
+      waitStart.current = null;
+      setRateWait(null);
+      if (began !== null) {
+        const waited = now - began;
+        setState((s) => (s.thinking ? { ...s, thinking: { ...s.thinking, since: s.thinking.since + waited } } : s));
+      }
+    },
   });
 
   const snapshot = useCallback((): SavedGame | null => {

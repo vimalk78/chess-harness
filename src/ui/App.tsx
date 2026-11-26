@@ -457,6 +457,7 @@ export default function App() {
           entries={state.logs.w}
           live={live.w}
           thinkingSince={state.thinking?.color === "w" ? state.thinking.since : null}
+          waiting={state.thinking?.color === "w" ? rateWait : null}
           isHuman={!usesModel(active.w.agentId)}
           now={now}
         />
@@ -552,6 +553,7 @@ export default function App() {
           entries={state.logs.b}
           live={live.b}
           thinkingSince={state.thinking?.color === "b" ? state.thinking.since : null}
+          waiting={state.thinking?.color === "b" ? rateWait : null}
           isHuman={!usesModel(active.b.agentId)}
           now={now}
         />

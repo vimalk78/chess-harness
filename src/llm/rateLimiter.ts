@@ -20,7 +20,8 @@ export class RateLimiter {
     this.sleep = sleep;
   }
 
-  async acquire(signal: AbortSignal): Promise<void> {
+  /** Waits for a free slot. `onWait` is told how long each wait will be (in ms). */
+  async acquire(signal: AbortSignal, onWait?: (ms: number) => void): Promise<void> {
     while (true) {
       const t = this.now();
       this.stamps = this.stamps.filter((s) => t - s < this.windowMs);
@@ -28,7 +29,9 @@ export class RateLimiter {
         this.stamps.push(t);
         return;
       }
-      await this.sleep(this.stamps[0] + this.windowMs - t + 50, signal);
+      const ms = this.stamps[0] + this.windowMs - t + 50;
+      onWait?.(ms);
+      await this.sleep(ms, signal);
     }
   }
 }

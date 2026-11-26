@@ -74,7 +74,17 @@ export class OpenRouterClient implements LlmClient {
     if (req.reasoningEffort) body.reasoning = { effort: req.reasoningEffort };
 
     for (let attempt = 0; ; attempt++) {
-      if (isFreeModel(req.model)) await this.freeLimiter.acquire(req.signal);
+      if (isFreeModel(req.model)) {
+        let waited = false;
+        try {
+          await this.freeLimiter.acquire(req.signal, (ms) => {
+            waited = true;
+            this.onWait({ model: req.model, waitMs: ms, reason: "spacing out requests to stay under the free limit of 20 a minute" });
+          });
+        } finally {
+          if (waited) this.onWait(null);
+        }
+      }
 
       const timeout = AbortSignal.timeout(this.timeoutMs);
       const timedOut = () =>
@@ -128,7 +138,11 @@ export class OpenRouterClient implements LlmClient {
           throw new Error(wait);
         }
         this.onWait({ model: req.model, waitMs: wait.ms, reason: wait.reason });
-        await this.sleep(wait.ms, req.signal);
+        try {
+          await this.sleep(wait.ms, req.signal);
+        } finally {
+          this.onWait(null); // the retry is a fresh request: no longer waiting
+        }
         continue;
       }
       this.onWait(null);
