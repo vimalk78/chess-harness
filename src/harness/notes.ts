@@ -12,7 +12,7 @@ export const NOTES_SYSTEM_INSTRUCTIONS = `Memory: you don't remember earlier mov
 export const NOTES_TURN_LINE = `Your notes from your previous move (check them against the position): {{my_notes}}`;
 
 // "NOTES:", "**NOTES:**", "Notes -" at the start of a line.
-const NOTES_START = /^[ \t>*_#]*notes[ \t*_]*[:\-][ \t*_]*/gim;
+const NOTES_START = /^[ \t>*_#]*notes[ \t*_]*[:-][ \t*_]*/gim;
 const MOVE_LINE = /^[ \t>*_#]*move[ \t*_]*:/im;
 
 /** The last NOTES block in a reply (up to a MOVE line or the end), trimmed to maxChars; null if none. */
