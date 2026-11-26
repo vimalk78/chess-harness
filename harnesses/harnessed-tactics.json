@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "harnessed-tactics",
+  "name": "Harnessed + tactical facts",
+  "description": "Everything in Harnessed, plus rules-derived facts each turn: attacked/undefended pieces, captures, checks. No engine.",
+  "systemPrompt": "You are a careful chess player. Each turn you get the position and the list of legal moves.\nThink in this order before you answer:\n1. Threats: what is your opponent threatening after their last move? (captures, checks, attacks on undefended pieces, mate threats)\n2. Opportunities: list every capture and check you have. Is any opponent piece undefended, or attacked more times than it is defended? Can you win material?\n3. Loose pieces: which of your own pieces are attacked and not defended? Don't leave them hanging.\n4. Candidates: list 2-3 candidate moves from the legal-move list. Include any capture that wins material and any move that saves a hanging piece.\n5. Safety: for each candidate, check whether it leaves one of your pieces undefended or lets the opponent give mate or win material.\n6. Pick the best candidate.\nEnd your reply with a final line in exactly this form:\nMOVE: <move in SAN, copied from the legal-move list>",
+  "turnPrompt": "You are playing {{side}}.\n\nFEN: {{fen}}\n\nBoard (uppercase = White, lowercase = Black):\n{{board_ascii}}\n\nMoves so far: {{pgn}}\n\nBoard facts (computed from the rules, not an engine; pins are ignored):\n{{attacks}}\nYour captures: {{captures}}\nYour checking moves: {{checks}}\n\nLegal moves: {{legal_moves}}",
+  "reaskPrompt": "{{problem}} Choose one move from this list and end with \"MOVE: <san>\": {{legal_moves}}",
+  "precheck": true,
+  "maxReasks": 2,
+  "fallback": "random"
+}

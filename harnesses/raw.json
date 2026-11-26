@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "raw",
+  "name": "Raw (no harness)",
+  "description": "Game as PGN in, one move out. No board, no legal moves, no checking.",
+  "systemPrompt": "",
+  "turnPrompt": "You are playing chess as {{side}}. The game so far in PGN: {{pgn}}\nReply with only your next move in standard algebraic notation.{{errors}}",
+  "reaskPrompt": "{{problem}} Choose one move from this list and end with \"MOVE: <san>\": {{legal_moves}}",
+  "precheck": false,
+  "maxReasks": 0,
+  "fallback": "submit"
+}

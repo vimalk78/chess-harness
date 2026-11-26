@@ -1,7 +1,7 @@
 // User harnesses: saved in the browser, exported/imported as JSON, shared as links.
 
 import { validateHarness, type HarnessConfig, type Validation } from "./config";
-import { PRESETS } from "./presets";
+import { LIBRARY } from "./presets";
 
 const STORAGE_KEY = "arena.harnesses";
 type KV = Pick<Storage, "getItem" | "setItem">;
@@ -30,7 +30,7 @@ export function createHarnessStore(storage: KV | null) {
     items = next;
     listeners.forEach((l) => l());
   };
-  const taken = (id: string) => items.some((h) => h.id === id) || PRESETS.some((p) => p.id === id);
+  const taken = (id: string) => items.some((h) => h.id === id) || LIBRARY.some((p) => p.id === id);
 
   return {
     list: (): HarnessConfig[] => items,

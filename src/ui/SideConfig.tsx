@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { CODE_AGENTS, customAgentId, getAgent, isPreset } from "../agents/registry";
+import { CODE_AGENTS, communityAgentId, customAgentId, getAgent, harnessConfigFor, isLibraryHarness } from "../agents/registry";
 import type { HarnessConfig } from "../harness/config";
-import { PRESETS } from "../harness/presets";
+import { COMMUNITY, PRESETS } from "../harness/presets";
 import type { Color, ReasoningEffort } from "../agents/types";
 import { isOftenRateLimited, type ModelInfo } from "../llm/models";
 import type { SideConfig as Side } from "./useGame";
@@ -22,6 +22,7 @@ interface Props {
 
 export function SideConfig({ color, value, disabled, models, freeOnly, harnesses, onChange, onHarness }: Props) {
   const def = getAgent(value.agentId);
+  const author = harnessConfigFor(value.agentId)?.author;
   const id = `side-${color}`;
   const modelId = value.model.trim();
   const offered = (models ?? []).filter((m) => !freeOnly || m.free);
@@ -59,6 +60,15 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
             </option>
           ))}
         </optgroup>
+        {COMMUNITY.length > 0 && (
+          <optgroup label="Community">
+            {COMMUNITY.map((h) => (
+              <option key={h.id} value={communityAgentId(h.id)}>
+                {h.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
         {harnesses.length > 0 && (
           <optgroup label="My harnesses">
             {harnesses.map((h) => (
@@ -76,9 +86,12 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
           ))}
         </optgroup>
       </select>
-      <p className="hint">{def.description}</p>
+      <p className="hint">
+        {def.description}
+        {author && ` By ${author}.`}
+      </p>
       <div className="harness-actions">
-        {isPreset(value.agentId) && (
+        {isLibraryHarness(value.agentId) && (
           <button type="button" onClick={() => onHarness("view")}>
             View / duplicate
           </button>

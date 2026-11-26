@@ -31,7 +31,7 @@ A full game usually takes 80–200 requests, so on 50/day expect part of a game 
 
 ## Harnesses
 
-A **harness** decides what the model sees each turn and what happens to its answer. Three presets come built in, and you can build your own in the browser, with no code:
+A **harness** decides what the model sees each turn and what happens to its answer. Three presets come built in, others are shared by the community, and you can build your own in the browser, with no code:
 
 | Preset | What the model gets each turn | What happens with its reply |
 |---|---|---|
@@ -40,6 +40,12 @@ A **harness** decides what the model sees each turn and what happens to its answ
 | **Harnessed + tactical facts** | Everything in Harnessed, plus attacked/undefended pieces, every capture and every check, computed from the rules. | Same as Harnessed. |
 
 **Human** is also available on either side: you drag pieces on the board.
+
+### The harnesses folder
+
+Every harness that ships with the site is a JSON file in [`harnesses/`](harnesses/), in the same format the editor exports: the three presets at the top level, and **community** submissions in [`harnesses/community/`](harnesses/community/), which appear in the agent menu under *Community*. A test checks every file (valid harness, id matches the file name, only known variables), and it runs on every pull request.
+
+**Submit yours:** in the harness editor, fill in *Author* and *Description* and click **Submit to community…**. GitHub opens with your file filled in, and a few clicks turn it into a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Build your own
 
@@ -135,8 +141,9 @@ interface GameView {
 ## Layout
 
 ```
+harnesses/    Built-in presets and community harnesses (JSON), bundled into the site
 src/agents/   Agent interface, registry, Human agent, move parser
-src/harness/  Harness configs, presets, runner, template variables, context blocks, saving/sharing
+src/harness/  Harness config format, loading harnesses/, runner, template variables, context blocks, saving/sharing, submissions
 src/game/     Referee (turn loop, legality, forfeits, pause, adjudication), PGN, saved games, transcripts
 src/llm/      OpenRouter client
 src/ui/       React components and the useGame hook

@@ -1,12 +1,15 @@
-// A harness config: everything a no-code harness controls. Presets and user
-// harnesses share this format; the harness runner (runner.ts) executes it.
+// A harness config: everything a no-code harness controls. Presets, community
+// harnesses (harnesses/ folder) and user harnesses share this format; the harness
+// runner (runner.ts) executes it. It is data only: prompts and a few settings.
 
 export interface HarnessConfig {
   version: 1;
-  /** Presets: "raw" | "harnessed" | "harnessed-tactics". User harnesses: random id. */
+  /** Library harnesses: the file name without .json. User harnesses: random id. */
   id: string;
   name: string;
   description?: string;
+  /** Who wrote it (name or GitHub handle); shown for community harnesses. */
+  author?: string;
   /** "" means no system message. */
   systemPrompt: string;
   /** Sent as the user message each turn. */
@@ -40,6 +43,9 @@ export function validateHarness(input: unknown): Validation {
   if (x.description !== undefined && (typeof x.description !== "string" || x.description.length > 500)) {
     return { ok: false, error: '"description" must be text of at most 500 characters.' };
   }
+  if (x.author !== undefined && (typeof x.author !== "string" || x.author.length > 80)) {
+    return { ok: false, error: '"author" must be text of at most 80 characters.' };
+  }
   if (typeof x.precheck !== "boolean") return { ok: false, error: '"precheck" must be true or false.' };
   if (!Number.isInteger(x.maxReasks) || (x.maxReasks as number) < 0 || (x.maxReasks as number) > 5) {
     return { ok: false, error: '"maxReasks" must be a whole number from 0 to 5.' };
@@ -50,6 +56,7 @@ export function validateHarness(input: unknown): Validation {
     id: x.id as string,
     name: (x.name as string).trim(),
     ...(x.description ? { description: x.description as string } : {}),
+    ...(typeof x.author === "string" && x.author.trim() ? { author: x.author.trim() } : {}),
     systemPrompt: x.systemPrompt as string,
     turnPrompt: x.turnPrompt as string,
     reaskPrompt: x.reaskPrompt as string,

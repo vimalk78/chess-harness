@@ -1,70 +1,51 @@
-import type { HarnessConfig } from "./config";
+// Harnesses that ship with the site, read from the harnesses/ folder at the repo root:
+//   harnesses/*.json            the built-in presets
+//   harnesses/community/*.json  harnesses submitted by pull request (see CONTRIBUTING.md)
+// Each file is one harness in the same JSON format the editor exports. The file name
+// (without .json) is the harness id. src/harness/library.test.ts checks every file.
 
-export const HARNESSED_SYSTEM_PROMPT = `You are a careful chess player. Each turn you get the position and the list of legal moves.
-Think in this order before you answer:
-1. Threats: what is your opponent threatening after their last move? (captures, checks, attacks on undefended pieces, mate threats)
-2. Opportunities: list every capture and check you have. Is any opponent piece undefended, or attacked more times than it is defended? Can you win material?
-3. Loose pieces: which of your own pieces are attacked and not defended? Don't leave them hanging.
-4. Candidates: list 2-3 candidate moves from the legal-move list. Include any capture that wins material and any move that saves a hanging piece.
-5. Safety: for each candidate, check whether it leaves one of your pieces undefended or lets the opponent give mate or win material.
-6. Pick the best candidate.
-End your reply with a final line in exactly this form:
-MOVE: <move in SAN, copied from the legal-move list>`;
+import { validateHarness, type HarnessConfig } from "./config";
 
-const REASK = `{{problem}} Choose one move from this list and end with "MOVE: <san>": {{legal_moves}}`;
+// Files are read as text and parsed here, so one malformed file is skipped (and named)
+// instead of breaking the whole site.
+function load(files: Record<string, string>): HarnessConfig[] {
+  const out: HarnessConfig[] = [];
+  for (const [path, text] of Object.entries(files)) {
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error(`Skipping ${path}: not valid JSON (${e instanceof Error ? e.message : e})`);
+      continue;
+    }
+    const v = validateHarness(data);
+    const id = path.split("/").pop()!.replace(/\.json$/, "");
+    if (!v.ok) console.error(`Skipping ${path}: ${v.error}`);
+    else if (v.config.id !== id) console.error(`Skipping ${path}: its id is "${v.config.id}", expected "${id}".`);
+    else out.push(v.config);
+  }
+  return out;
+}
 
-const HARNESSED_TURN = `You are playing {{side}}.
+const builtIn = load(import.meta.glob<string>("../../harnesses/*.json", { eager: true, query: "?raw", import: "default" }));
 
-FEN: {{fen}}
+function preset(id: string): HarnessConfig {
+  const p = builtIn.find((h) => h.id === id);
+  if (!p) throw new Error(`Missing preset harnesses/${id}.json`);
+  return p;
+}
 
-Board (uppercase = White, lowercase = Black):
-{{board_ascii}}
+export const RAW_PRESET = preset("raw");
+export const HARNESSED_PRESET = preset("harnessed");
+export const TACTICAL_PRESET = preset("harnessed-tactics");
 
-Moves so far: {{pgn}}
-
-Legal moves: {{legal_moves}}`;
-
-export const RAW_PRESET: HarnessConfig = {
-  version: 1,
-  id: "raw",
-  name: "Raw (no harness)",
-  description: "Game as PGN in, one move out. No board, no legal moves, no checking.",
-  systemPrompt: "",
-  turnPrompt:
-    "You are playing chess as {{side}}. The game so far in PGN: {{pgn}}\nReply with only your next move in standard algebraic notation.{{errors}}",
-  reaskPrompt: REASK,
-  precheck: false,
-  maxReasks: 0,
-  fallback: "submit",
-};
-
-export const HARNESSED_PRESET: HarnessConfig = {
-  version: 1,
-  id: "harnessed",
-  name: "Harnessed (example harness)",
-  description: "FEN + board + legal moves, a threats/opportunities/safety procedure, self-checked moves.",
-  systemPrompt: HARNESSED_SYSTEM_PROMPT,
-  turnPrompt: HARNESSED_TURN,
-  reaskPrompt: REASK,
-  precheck: true,
-  maxReasks: 2,
-  fallback: "random",
-};
-
-export const TACTICAL_PRESET: HarnessConfig = {
-  ...HARNESSED_PRESET,
-  id: "harnessed-tactics",
-  name: "Harnessed + tactical facts",
-  description: "Everything in Harnessed, plus rules-derived facts each turn: attacked/undefended pieces, captures, checks. No engine.",
-  turnPrompt: HARNESSED_TURN.replace(
-    "\n\nLegal moves:",
-    `\n\nBoard facts (computed from the rules, not an engine; pins are ignored):
-{{attacks}}
-Your captures: {{captures}}
-Your checking moves: {{checks}}
-
-Legal moves:`,
-  ),
-};
-
+/** Built-in presets, in menu order. */
 export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET];
+
+/** Community harnesses, sorted by name. */
+export const COMMUNITY: HarnessConfig[] = load(
+  import.meta.glob<string>("../../harnesses/community/*.json", { eager: true, query: "?raw", import: "default" }),
+).sort((a, b) => a.name.localeCompare(b.name));
+
+/** Every harness that ships with the site (read-only in the editor). */
+export const LIBRARY: HarnessConfig[] = [...PRESETS, ...COMMUNITY];

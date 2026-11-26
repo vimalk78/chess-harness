@@ -3,14 +3,16 @@ import type { HarnessConfig } from "../harness/config";
 import { validateHarness } from "../harness/config";
 import { ALL_VARIABLE_NAMES, BASE_VARIABLES, CONTEXT_BLOCKS, type VariableContext, type VariableInfo } from "../harness/contextBlocks";
 import { renderPrompts, renderReask } from "../harness/runner";
+import { COMMUNITY } from "../harness/presets";
 import { exportHarnessJson, harnessStore, parseHarnessJson, shareUrl } from "../harness/store";
+import { prepareSubmission } from "../harness/submit";
 import { templateVariables } from "../harness/template";
 
 type Field = "systemPrompt" | "turnPrompt" | "reaskPrompt";
 
 interface Props {
   initial: HarnessConfig;
-  /** Presets are read-only: they can be viewed, duplicated, exported and shared. */
+  /** Presets and community harnesses are read-only: they can be viewed, duplicated, exported and shared. */
   readOnly: boolean;
   /** Not yet saved (a new harness). */
   isNew: boolean;
@@ -77,12 +79,16 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
   };
 
   const save = () => trySave(() => harnessStore.save(draft));
+  const isCommunity = readOnly && COMMUNITY.some((h) => h.id === initial.id);
   const saveCopy = () =>
-    trySave(() =>
-      readOnly
-        ? harnessStore.addCopy({ ...draft, description: `Based on the "${draft.name}" preset.` }, `Copy of ${draft.name}`)
-        : harnessStore.addCopy(draft, `${draft.name} (copy)`),
-    );
+    trySave(() => {
+      if (!readOnly) return harnessStore.addCopy(draft, `${draft.name} (copy)`);
+      const basedOn = isCommunity
+        ? `Based on the community harness "${draft.name}"${draft.author ? ` by ${draft.author}` : ""}.`
+        : `Based on the "${draft.name}" preset.`;
+      // The copy is the user's own: it starts without the original author.
+      return harnessStore.addCopy({ ...draft, author: undefined, description: basedOn }, `Copy of ${draft.name}`);
+    });
 
   const remove = () => {
     if (!confirm(`Delete "${draft.name}"? This can't be undone.`)) return;
@@ -90,13 +96,36 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
     onDeleted(draft.id);
   };
 
-  const exportJson = () => {
-    const blob = new Blob([exportHarnessJson(draft)], { type: "application/json" });
+  const downloadFile = (name: string, text: string) => {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${draft.name.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "") || "harness"}.harness.json`;
+    a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+    a.download = name;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const exportJson = () =>
+    downloadFile(`${draft.name.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "") || "harness"}.harness.json`, exportHarnessJson(draft));
+
+  const submit = () => {
+    if (unknown.length) return flash("error", `Fix the unknown variables first: ${unknown.map((u) => `{{${u}}}`).join(", ")}.`);
+    const sub = prepareSubmission(draft);
+    if (!sub.ok) return flash("error", sub.error);
+    const intro = sub.byUpload
+      ? `This harness is too long to fill in through a link, so ${sub.id}.json will be downloaded and GitHub's upload page will open. Drag the file onto that page.`
+      : `This opens GitHub with your harness filled in as ${sub.path}.`;
+    const ok = confirm(
+      `${intro}\n\nYou need a GitHub account. GitHub copies (forks) the project for you and opens a pull request; once it's reviewed and merged, your harness appears under "Community" for everyone.\n\nSubmitted harnesses are public. Continue?`,
+    );
+    if (!ok) return;
+    if (sub.byUpload) downloadFile(`${sub.id}.json`, sub.json);
+    window.open(sub.url, "_blank", "noopener");
+    flash(
+      "ok",
+      sub.byUpload
+        ? `Downloaded ${sub.id}.json. On GitHub, drop it on the page, then "Propose changes" and "Create pull request".`
+        : `On GitHub, click "Commit changes…", then "Propose changes" and "Create pull request".`,
+    );
   };
 
   const importJson = async (file: File) => {
@@ -116,7 +145,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
     <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal editor" role="dialog" aria-modal="true" aria-label="Harness editor">
         <header className="editor-head">
-          <h2>{readOnly ? "Preset (read-only)" : isNew ? "New harness" : "Edit harness"}</h2>
+          <h2>{isCommunity ? "Community harness (read-only)" : readOnly ? "Preset (read-only)" : isNew ? "New harness" : "Edit harness"}</h2>
           <button type="button" className="close" onClick={onClose} aria-label="Close">
             ×
           </button>
@@ -128,6 +157,18 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
             <input id="h-name" value={draft.name} readOnly={readOnly} onChange={(e) => set("name", e.target.value)} />
             <label htmlFor="h-desc">Description (optional)</label>
             <input id="h-desc" value={draft.description ?? ""} readOnly={readOnly} onChange={(e) => set("description", e.target.value)} />
+            {(!readOnly || draft.author) && (
+              <>
+                <label htmlFor="h-author">Author (optional; needed to submit)</label>
+                <input
+                  id="h-author"
+                  value={draft.author ?? ""}
+                  readOnly={readOnly}
+                  placeholder="Your name or GitHub handle"
+                  onChange={(e) => set("author", e.target.value)}
+                />
+              </>
+            )}
 
             {(Object.keys(FIELD_LABEL) as Field[]).map((f) => (
               <div key={f} className="field">
@@ -189,7 +230,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
             {tab === "vars" ? (
               <>
                 <p className="hint">
-                  {readOnly ? "Variables this preset can use." : `Click to insert into the ${FIELD_LABEL[lastField].split(" (")[0].toLowerCase()}.`}{" "}
+                  {readOnly ? "Variables a harness can use." : `Click to insert into the ${FIELD_LABEL[lastField].split(" (")[0].toLowerCase()}.`}{" "}
                   Context blocks are computed from the rules before each call; the model never calls them.
                 </p>
                 <VariableList title="Game" items={BASE_VARIABLES} used={used} onInsert={insert} disabled={readOnly} />
@@ -235,6 +276,11 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
           <button type="button" onClick={copyLink}>
             Copy share link
           </button>
+          {!readOnly && (
+            <button type="button" onClick={submit} title="Propose this harness for the Community list, as a pull request on GitHub">
+              Submit to community…
+            </button>
+          )}
           {!readOnly && !isNew && (
             <button type="button" className="danger" onClick={remove}>
               Delete
