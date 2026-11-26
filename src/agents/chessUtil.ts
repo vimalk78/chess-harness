@@ -14,8 +14,3 @@ export function legalSan(fen: string, move: string): string | null {
     return null;
   }
 }
-
-/** Plain-text board, rank 8 at the top, as chess.js renders it. */
-export function asciiBoard(fen: string): string {
-  return new Chess(fen).ascii();
-}

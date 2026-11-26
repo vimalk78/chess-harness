@@ -17,25 +17,9 @@ npm test         # unit tests
 npm run build    # static site in dist/, host anywhere
 ```
 
-## Self-hosting
+## Hosting
 
-The live site is deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. You can also serve it yourself, for example with Tailscale Funnel:
-
-```bash
-npm run build
-# serve dist/ on localhost (systemd user service shown; any static server works)
-cat > ~/.config/systemd/user/chess-arena.service <<'UNIT'
-[Service]
-ExecStart=/usr/bin/python3 -m http.server 4173 --bind 127.0.0.1 --directory /path/to/chess-harness/dist
-Restart=on-failure
-[Install]
-WantedBy=default.target
-UNIT
-systemctl --user enable --now chess-arena.service
-tailscale funnel --bg 4173          # public https://<machine>.<tailnet>.ts.net/
-```
-
-To update the site, run `npm run build` again. To take it down, run `tailscale funnel --https=443 off`. Visitors' API keys stay in their own browsers; nothing secret is stored on the server.
+The live site is deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. To host your own copy, fork the repo and enable Pages (Settings → Pages → Source: GitHub Actions), or put the output of `npm run build` on any static host: `dist/` uses relative paths, so it works at a domain root or under a sub-path. There is no server side; visitors' API keys stay in their own browsers.
 
 ## Free OpenRouter accounts
 
@@ -156,5 +140,4 @@ src/harness/  Harness configs, presets, runner, template variables, context bloc
 src/game/     Referee (turn loop, legality, forfeits, pause, adjudication), PGN, saved games, transcripts
 src/llm/      OpenRouter client
 src/ui/       React components and the useGame hook
-docs/         Design spec and plan
 ```

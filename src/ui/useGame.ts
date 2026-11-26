@@ -92,7 +92,7 @@ function restoreState(game: SavedGame, status: GameState["status"]): GameState {
   };
 }
 
-export const ADJUDICATED = "adjudicated by the person watching";
+const ADJUDICATED = "adjudicated by the person watching";
 
 export function useGame(getKey: () => string) {
   const [state, setState] = useState<GameState>(initialState);
