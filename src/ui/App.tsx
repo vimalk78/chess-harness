@@ -278,6 +278,10 @@ export default function App() {
           ? "Enter a model ID"
           : null;
 
+  // A paused game (e.g. one just reopened) needs a key if either side calls a model.
+  const gameNeedsKey = !!(state.harnesses?.w || state.harnesses?.b);
+  const resumeProblem = gameNeedsKey && !key.trim() ? "Enter your OpenRouter key above to resume" : null;
+
   const label = (c: Color) => state.labels?.[c] ?? sideLabel(active[c]);
   const humanColors = (["w", "b"] as Color[]).filter((c) => !usesModel(active[c].agentId));
   const orientation = humanColors.length === 1 && humanColors[0] === "b" ? "black" : "white";
@@ -421,7 +425,8 @@ export default function App() {
         <KeyInput
           value={key}
           remember={remember}
-          disabled={playing}
+          // The key is read at each call, so it can be entered or changed while a game is paused.
+          disabled={state.status === "running"}
           quota={quota}
           quotaError={quotaError}
           freeOnly={freeOnly}
@@ -468,10 +473,11 @@ export default function App() {
             )}
             {state.status === "running" && <button onClick={pause}>Pause</button>}
             {state.status === "paused" && (
-              <button className="primary" onClick={resume}>
+              <button className="primary" onClick={resume} disabled={!!resumeProblem} title={resumeProblem ?? ""}>
                 Resume
               </button>
             )}
+            {state.status === "paused" && resumeProblem && <span className="hint">{resumeProblem}</span>}
             {playing && (
               <select
                 value=""
