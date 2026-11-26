@@ -10,7 +10,7 @@ import type { HarnessConfig } from "../harness/config";
 import { harnessDefinition } from "../harness/runner";
 import { GameRunner, type GameEvent, type GameResult } from "../game/referee";
 import { clearCurrentGame, saveCurrentGame } from "../game/gameStore";
-import { isUnfinished, replay, type SavedGame, type SideConfig } from "../game/savedGame";
+import { isUnfinished, latestNotes, replay, type SavedGame, type SideConfig } from "../game/savedGame";
 import { OpenRouterClient } from "../llm/openrouter";
 import { countEvent } from "../analytics";
 
@@ -202,7 +202,7 @@ export function useGame(getKey: () => string) {
         flushLive();
       };
       const runner: GameRunner = new GameRunner(
-        { white, black, onStream, startHistory: game.history, startPaused: paused },
+        { white, black, onStream, startHistory: game.history, startPaused: paused, startNotes: latestNotes(game.events) },
         (event) => {
           if (runnerRef.current !== runner) return; // event from a game that was replaced
           eventsRef.current.push({ t: Date.now(), event });

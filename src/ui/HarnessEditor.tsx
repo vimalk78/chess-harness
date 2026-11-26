@@ -6,6 +6,7 @@ import { renderPrompts, renderReask } from "../harness/runner";
 import { COMMUNITY } from "../harness/presets";
 import { exportHarnessJson, harnessStore, parseHarnessJson, shareUrl } from "../harness/store";
 import { prepareSubmission } from "../harness/submit";
+import { DEFAULT_NOTES_MAX_CHARS, NOTES_MAX_CHAR_CHOICES, NOTES_SYSTEM_INSTRUCTIONS, NOTES_TURN_LINE } from "../harness/notes";
 import { templateVariables } from "../harness/template";
 
 type Field = "systemPrompt" | "turnPrompt" | "reaskPrompt";
@@ -51,6 +52,23 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
   const chars = preview.system.length + preview.user.length;
 
   const set = <K extends keyof HarnessConfig>(k: K, v: HarnessConfig[K]) => setDraft((d) => ({ ...d, [k]: v }));
+
+  // Notes only work if the prompts ask for a NOTES block and pass {{my_notes}} back.
+  const asksForNotes = /notes\s*:/i.test(draft.systemPrompt + draft.turnPrompt);
+  const notesProblem = !draft.keepNotes
+    ? null
+    : !used.has("my_notes")
+      ? "No prompt uses {{my_notes}}, so the model never gets its notes back."
+      : !asksForNotes
+        ? 'No prompt asks the model to write a "NOTES:" block.'
+        : null;
+  const addNotesInstructions = () =>
+    setDraft((d) => ({
+      ...d,
+      keepNotes: true,
+      systemPrompt: /notes\s*:/i.test(d.systemPrompt) ? d.systemPrompt : `${d.systemPrompt.trimEnd()}${d.systemPrompt.trim() ? "\n\n" : ""}${NOTES_SYSTEM_INSTRUCTIONS}`,
+      turnPrompt: d.turnPrompt.includes("{{my_notes}}") ? d.turnPrompt : `${d.turnPrompt.trimEnd()}\n\n${NOTES_TURN_LINE}`,
+    }));
   const flash = (kind: "ok" | "error", text: string) => setMessage({ kind, text });
 
   const insert = (name: string) => {
@@ -212,6 +230,36 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
                     <option value="submit">submit the last answer to the referee</option>
                   </select>
                 </div>
+              )}
+              <label className="check">
+                <input type="checkbox" checked={!!draft.keepNotes} onChange={(e) => set("keepNotes", e.target.checked)} />
+                Keep notes between moves
+              </label>
+              <p className="hint">
+                The harness saves the "NOTES:" block from each reply and gives it back next move as {"{{my_notes}}"}. Each side only
+                ever sees its own notes.
+              </p>
+              {draft.keepNotes && (
+                <div className="row">
+                  <label htmlFor="h-notes-max">Keep up to</label>
+                  <select
+                    id="h-notes-max"
+                    value={draft.notesMaxChars ?? DEFAULT_NOTES_MAX_CHARS}
+                    onChange={(e) => set("notesMaxChars", Number(e.target.value))}
+                  >
+                    {NOTES_MAX_CHAR_CHOICES.map((n) => (
+                      <option key={n} value={n}>
+                        {n.toLocaleString()} characters
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {draft.keepNotes && notesProblem && <p className="hint warn">{notesProblem}</p>}
+              {!readOnly && (!used.has("my_notes") || !asksForNotes) && (
+                <button type="button" onClick={addNotesInstructions}>
+                  Add notes instructions to the prompts
+                </button>
               )}
             </fieldset>
           </section>

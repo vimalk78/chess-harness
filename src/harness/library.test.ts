@@ -12,7 +12,7 @@ const raw = {
   ...import.meta.glob<string>("../../harnesses/*", { eager: true, query: "?raw", import: "default" }),
   ...import.meta.glob<string>("../../harnesses/community/*", { eager: true, query: "?raw", import: "default" }),
 };
-const KNOWN_KEYS = new Set(["version", "id", "name", "description", "author", "systemPrompt", "turnPrompt", "reaskPrompt", "precheck", "maxReasks", "fallback"]);
+const KNOWN_KEYS = new Set(["version", "id", "name", "description", "author", "systemPrompt", "turnPrompt", "reaskPrompt", "precheck", "maxReasks", "fallback", "keepNotes", "notesMaxChars"]);
 
 const files = Object.entries(raw)
   .filter(([p]) => p.endsWith(".json"))
@@ -24,8 +24,8 @@ const files = Object.entries(raw)
   }));
 
 describe("harnesses/ folder", () => {
-  it("has the three presets", () => {
-    expect(PRESETS.map((p) => p.id)).toEqual(["raw", "harnessed", "harnessed-tactics"]);
+  it("has the built-in presets", () => {
+    expect(PRESETS.map((p) => p.id)).toEqual(["raw", "harnessed", "harnessed-tactics", "harnessed-notes"]);
   });
 
   it("has only .json harness files in community/ (plus its README)", () => {

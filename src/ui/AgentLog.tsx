@@ -140,6 +140,13 @@ function Entry({ entry }: { entry: PanelEntry }) {
       );
     case "note":
       return <div className="entry note">{entry.text}</div>;
+    case "notes":
+      return (
+        <div className="entry notes">
+          <div className="notes-label">Notes kept for next move</div>
+          <pre>{entry.text}</pre>
+        </div>
+      );
     case "illegal":
       return <div className="entry illegal">{entry.text}</div>;
     case "turn":

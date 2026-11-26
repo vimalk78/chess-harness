@@ -38,9 +38,10 @@ function preset(id: string): HarnessConfig {
 export const RAW_PRESET = preset("raw");
 export const HARNESSED_PRESET = preset("harnessed");
 export const TACTICAL_PRESET = preset("harnessed-tactics");
+export const NOTES_PRESET = preset("harnessed-notes");
 
 /** Built-in presets, in menu order. */
-export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET];
+export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET, NOTES_PRESET];
 
 /** Community harnesses, sorted by name. */
 export const COMMUNITY: HarnessConfig[] = load(

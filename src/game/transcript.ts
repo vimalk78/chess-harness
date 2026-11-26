@@ -139,6 +139,7 @@ export function buildTranscript(g: SavedGame, pgn: string): string {
       parts.push(`**Reply**${usage}:`, "", e.text.trim() ? fence(e.text) : "_(empty)_");
       return parts.join("\n");
     }
+    if (e.kind === "notes") return ["**Notes kept for next move:**", "", fence(e.text)].join("\n");
     return `> ${e.text}`;
   };
 

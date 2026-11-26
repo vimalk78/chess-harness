@@ -43,6 +43,16 @@ export function isUnfinished(g: Pick<SavedGame, "result">): boolean {
   return g.result === null || g.result === "*";
 }
 
+/** Each side's latest notes in a saved game's events (handed back to the referee on resume). */
+export function latestNotes(events: SavedGame["events"]): Partial<Record<Color, string>> {
+  const notes: Partial<Record<Color, string>> = {};
+  for (const { event } of events) {
+    if (event.type !== "log") continue;
+    for (const e of event.entries) if (e.kind === "notes") notes[event.color] = e.text;
+  }
+  return notes;
+}
+
 /** Replays SAN moves; returns the error for the first illegal one. */
 export function replay(history: string[]): { ok: true; chess: Chess } | { ok: false; error: string } {
   const chess = new Chess();

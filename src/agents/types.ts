@@ -10,6 +10,8 @@ export interface GameView {
   myColor: Color;
   /** Moves rejected by the referee earlier in this same turn; empty on first try */
   previousAttempts: { move: string; error: string }[];
+  /** This side's own notes from its previous move (see the "notes" log entry); never the opponent's. */
+  myNotes?: string;
   /** Fires on pause/stop; agents must pass it to fetch */
   signal: AbortSignal;
   /** Live model output for the UI. Send { start: true } before each model call. */
@@ -31,7 +33,9 @@ export interface Usage {
 export type LogEntry =
   | { kind: "prompt"; text: string }
   | { kind: "response"; text: string; usage?: Usage; reasoning?: string }
-  | { kind: "note"; text: string };
+  | { kind: "note"; text: string }
+  /** Notes the agent keeps for its next move. The referee hands the latest back as GameView.myNotes. */
+  | { kind: "notes"; text: string };
 
 export interface AgentResult {
   /** SAN or UCI */

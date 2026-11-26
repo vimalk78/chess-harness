@@ -22,6 +22,10 @@ export interface HarnessConfig {
   maxReasks: number;
   /** After re-asks run out: play a random legal move (logged), or submit the last answer to the referee. */
   fallback: "random" | "submit";
+  /** Save the reply's "NOTES:" block and give it back next move as {{my_notes}}. Off when absent. */
+  keepNotes?: boolean;
+  /** Longest notes kept, in characters (100-4000). Default 800. */
+  notesMaxChars?: number;
 }
 
 export const MAX_PROMPT_CHARS = 20_000;
@@ -51,6 +55,10 @@ export function validateHarness(input: unknown): Validation {
     return { ok: false, error: '"maxReasks" must be a whole number from 0 to 5.' };
   }
   if (x.fallback !== "random" && x.fallback !== "submit") return { ok: false, error: '"fallback" must be "random" or "submit".' };
+  if (x.keepNotes !== undefined && typeof x.keepNotes !== "boolean") return { ok: false, error: '"keepNotes" must be true or false.' };
+  if (x.notesMaxChars !== undefined && (!Number.isInteger(x.notesMaxChars) || (x.notesMaxChars as number) < 100 || (x.notesMaxChars as number) > 4000)) {
+    return { ok: false, error: '"notesMaxChars" must be a whole number from 100 to 4000.' };
+  }
   const config: HarnessConfig = {
     version: 1,
     id: x.id as string,
@@ -63,6 +71,8 @@ export function validateHarness(input: unknown): Validation {
     precheck: x.precheck,
     maxReasks: x.maxReasks as number,
     fallback: x.fallback,
+    ...(x.keepNotes ? { keepNotes: true } : {}),
+    ...(x.keepNotes && x.notesMaxChars !== undefined ? { notesMaxChars: x.notesMaxChars as number } : {}),
   };
   return { ok: true, config };
 }

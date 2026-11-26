@@ -95,6 +95,6 @@ describe("context blocks", () => {
   it("every block has a description and a fairness tag; only move_safety is borderline", () => {
     for (const b of CONTEXT_BLOCKS) expect(b.description.length).toBeGreaterThan(10);
     expect(CONTEXT_BLOCKS.filter((b) => b.fairness === "borderline").map((b) => b.name)).toEqual(["move_safety"]);
-    expect(ALL_VARIABLE_NAMES.size).toBe(8 + 12);
+    expect(ALL_VARIABLE_NAMES.size).toBe(9 + 12); // 9 game variables (incl. my_notes) + 12 context blocks
   });
 });

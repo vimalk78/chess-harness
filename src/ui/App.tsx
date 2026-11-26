@@ -329,7 +329,8 @@ export default function App() {
         <p className="brand">Chess Agent Arena</p>
         <h1>Is it the model, or the harness?</h1>
         <p className="lede">
-          People say what wraps an AI model matters more than the model itself. Test it at chess: you control what the model
+          A common claim in AI engineering is that the harness around a model matters more than the model itself. Test it at
+          chess: you control what the model
           sees each turn, what it's told to check, and what happens when it tries an illegal move. Pit a small model with a
           good harness against a big model without one, and watch every prompt.
         </p>

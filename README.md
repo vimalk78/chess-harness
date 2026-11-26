@@ -38,6 +38,7 @@ A **harness** decides what the model sees each turn and what happens to its answ
 | **Raw** | "You are playing White. The game so far in PGN: … Reply with only your next move." No board, no legal moves. | Sent to the referee unchecked. A rejected move comes back as one bare line: "Your move X was rejected: … Try again." |
 | **Harnessed** | A system prompt with a procedure (threats → opportunities → loose pieces → candidates → safety → `MOVE: <san>`), plus FEN, an ASCII board, the moves so far and the legal-move list. | Pre-checked against the rules, re-asked up to 2 times with the exact problem, and as a last resort a random legal move (noted in the log). |
 | **Harnessed + tactical facts** | Everything in Harnessed, plus attacked/undefended pieces, every capture and every check, computed from the rules. | Same as Harnessed. |
+| **Harnessed + notes** | Everything in Harnessed, plus memory: the model ends each reply with a short `NOTES:` block (plan, threats), and gets its own notes back next move. | Same as Harnessed. |
 
 **Human** is also available on either side: you drag pieces on the board.
 
@@ -53,12 +54,13 @@ Click **View / duplicate** on a preset (or **+ New harness**) to open the editor
 
 - **System prompt** (optional), **turn prompt** (sent every turn) and **re-ask prompt** (sent after a failed pre-check).
 - **Pre-check moves before submitting**: the harness checks the model's move with the rules and re-asks before the referee sees it, then either plays a random legal move or submits the last answer anyway.
+- **Keep notes between moves**: the model has no memory between moves, so the harness can give it one. It saves the `NOTES:` block at the end of each reply and passes it back next move as `{{my_notes}}`. Each side only ever sees its own notes, and notes survive saving and resuming. *Add notes instructions to the prompts* sets this up in one click.
 
 Prompts are templates. Write a `{{variable}}` wherever you want game information to appear; it's filled in fresh every turn:
 
 | Game | Context blocks (computed from the rules before each call) |
 |---|---|
-| `{{side}}` `{{opponent}}` `{{fen}}` `{{pgn}}` `{{move_number}}` `{{last_move}}` `{{errors}}` (referee rejections this turn) `{{problem}}` (re-ask only) | `{{board_ascii}}` `{{board_unicode}}` `{{pieces}}` `{{legal_moves}}` `{{legal_moves_by_piece}}` `{{last_move_threats}}` `{{attacks}}` `{{captures}}` `{{checks}}` `{{material}}` `{{game_state}}` `{{move_safety}}` (borderline: looks one move ahead) |
+| `{{side}}` `{{opponent}}` `{{fen}}` `{{pgn}}` `{{move_number}}` `{{last_move}}` `{{my_notes}}` (your notes from last move) `{{errors}}` (referee rejections this turn) `{{problem}}` (re-ask only) | `{{board_ascii}}` `{{board_unicode}}` `{{pieces}}` `{{legal_moves}}` `{{legal_moves_by_piece}}` `{{last_move_threats}}` `{{attacks}}` `{{captures}}` `{{checks}}` `{{material}}` `{{game_state}}` `{{move_safety}}` (borderline: looks one move ahead) |
 
 The editor's **Preview** tab shows the exact prompt the model would receive in the current position. Harnesses are saved in your browser; you can export/import them as JSON or **copy a share link** (the harness travels in the URL, nothing goes to a server).
 
@@ -131,6 +133,7 @@ interface GameView {
   legalMoves: string[];       // SAN
   myColor: "w" | "b";
   previousAttempts: { move: string; error: string }[]; // moves the referee rejected this turn
+  myNotes?: string;           // this side's notes from its previous move (log a { kind: "notes" } entry to keep new ones)
   signal: AbortSignal;        // pass to LLM calls so Pause/Stop can cancel them
   onStream?: (delta: { start?: boolean; content?: string; reasoning?: string }) => void; // live output for the UI
 }

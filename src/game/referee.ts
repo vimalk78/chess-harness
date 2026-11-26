@@ -28,6 +28,8 @@ export interface RefereeOptions {
   startHistory?: string[];
   /** Start paused, so nothing is asked until resume() (used when reopening a saved game). */
   startPaused?: boolean;
+  /** Each side's latest notes, when continuing a saved game. */
+  startNotes?: Partial<Record<Color, string>>;
 }
 
 const UCI = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/;
@@ -45,9 +47,12 @@ export class GameRunner {
   private resumeWaiter: (() => void) | null = null;
   private stopped = false;
   private finished = false;
+  /** Each side's own notes for its next move. Kept per side: neither agent ever sees the other's. */
+  private notes: Partial<Record<Color, string>> = {};
 
   constructor(opts: RefereeOptions, onEvent: (e: GameEvent) => void) {
-    const { startHistory, startPaused, ...rest } = opts;
+    const { startHistory, startPaused, startNotes, ...rest } = opts;
+    this.notes = { ...startNotes };
     this.opts = { maxIllegalAttempts: 3, maxPlies: 300, ...rest };
     this.emit = onEvent;
     for (const san of startHistory ?? []) {
@@ -147,6 +152,7 @@ export class GameRunner {
             legalMoves: this.chess.moves(),
             myColor: color,
             previousAttempts: [...attempts],
+            myNotes: this.notes[color],
             signal: abort.signal,
             onStream: (delta) => {
               if (!abort.signal.aborted) this.opts.onStream?.(color, delta);
@@ -154,6 +160,8 @@ export class GameRunner {
           });
           if (abort.signal.aborted) continue; // paused or stopped mid-call: discard, replay
           if (res.log.length) this.emit({ type: "log", color, entries: res.log });
+          const kept = res.log.filter((e) => e.kind === "notes").at(-1);
+          if (kept) this.notes[color] = kept.text;
           move = res.move;
         } catch (err) {
           if (this.stopped) return end("*", "stopped");

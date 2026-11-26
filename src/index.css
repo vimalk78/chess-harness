@@ -207,6 +207,8 @@ footer .usage strong { color: var(--text); font-weight: 600; }
 }
 
 /* Live streaming output */
+.entry.notes { border-left: 3px solid var(--accent); padding-left: 8px; }
+.notes-label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
 .entry.live { border: 1px dashed var(--accent); padding: 8px; }
 .live-label { font-size: 0.72rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
 .live-reasoning { color: var(--muted); max-height: 260px; overflow-y: auto; border-left: 2px solid var(--border); padding-left: 6px; margin-bottom: 6px !important; }

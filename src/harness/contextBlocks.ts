@@ -18,7 +18,7 @@ export interface VariableInfo {
 
 /** Everything a variable may look at for the current turn. */
 export interface VariableContext {
-  game: Pick<GameView, "history" | "fen" | "legalMoves" | "myColor" | "previousAttempts">;
+  game: Pick<GameView, "history" | "fen" | "legalMoves" | "myColor" | "previousAttempts" | "myNotes">;
   /** Only set while rendering a re-ask prompt. */
   problem?: string;
 }
@@ -117,6 +117,14 @@ const BASE: (VariableInfo & { value: (ctx: VariableContext) => string })[] = [
       const san = game.history.at(-1);
       return san ? `${colorName(other(game.myColor))} played ${san}` : "none";
     },
+  },
+  {
+    name: "my_notes",
+    label: "Your notes",
+    description:
+      'The notes you wrote at the end of your previous move (turn on "Keep notes between moves"), or "(none yet)". Only your own notes, never the opponent\'s.',
+    fairness: "game",
+    value: ({ game }) => game.myNotes?.trim() || "(none yet)",
   },
   {
     name: "errors",
