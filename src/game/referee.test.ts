@@ -158,4 +158,52 @@ describe("GameRunner", () => {
       ["w", { content: "MOVE: e4" }],
     ]);
   });
+
+  it("continues a game from startHistory", async () => {
+    const white = scripted(["Qxf7#"]);
+    const { events, runner, done } = run(white, scripted([]), { startHistory: ["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6"] });
+    await done;
+    expect(white.calls[0].history).toHaveLength(6);
+    expect(runner.history.at(-1)).toBe("Qxf7#");
+    expect(gameOver(events)).toMatchObject({ result: "1-0", reason: "checkmate" });
+  });
+
+  it("rejects a startHistory with an illegal move", () => {
+    expect(() => new GameRunner({ white: scripted([]), black: scripted([]), startHistory: ["e4", "e4"] }, () => {})).toThrow(
+      /illegal move: e4/,
+    );
+  });
+
+  it("startPaused waits for resume before asking anyone", async () => {
+    const white = scripted(["e4", "Bc4", "Qh5", "Qxf7#"]);
+    const events: GameEvent[] = [];
+    const runner = new GameRunner({ white, black: scripted(["e5", "Nc6", "Nf6"]), startPaused: true }, (e) => events.push(e));
+    const done = runner.start();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(white.calls).toHaveLength(0);
+    expect(runner.isPaused).toBe(true);
+    runner.resume();
+    await done;
+    expect(gameOver(events)).toMatchObject({ result: "1-0" });
+  });
+
+  it("adjudicate ends a running game once, with the given result", async () => {
+    const white: Agent = { nextMove: (g) => new Promise((_, rej) => g.signal.addEventListener("abort", () => rej(new Error("aborted")))) };
+    const events: GameEvent[] = [];
+    const runner = new GameRunner({ white, black: scripted([]) }, (e) => {
+      events.push(e);
+      if (e.type === "turnStart") queueMicrotask(() => runner.adjudicate("1/2-1/2", "agreed"));
+    });
+    await runner.start();
+    expect(events.filter((e) => e.type === "gameOver")).toEqual([{ type: "gameOver", result: "1/2-1/2", reason: "agreed" }]);
+  });
+
+  it("adjudicate works while paused", async () => {
+    const events: GameEvent[] = [];
+    const runner = new GameRunner({ white: scripted([]), black: scripted([]), startPaused: true }, (e) => events.push(e));
+    const done = runner.start();
+    runner.adjudicate("0-1", "resigned");
+    await done;
+    expect(events.filter((e) => e.type === "gameOver")).toEqual([{ type: "gameOver", result: "0-1", reason: "resigned" }]);
+  });
 });

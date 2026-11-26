@@ -9,6 +9,9 @@ import { useHarnesses } from "./useHarnesses";
 import { fetchPublicCount, GOATCOUNTER_CODE } from "../analytics";
 import type { Color } from "../agents/types";
 import { buildPgn } from "../game/pgn";
+import { clearCurrentGame, loadCurrentGame } from "../game/gameStore";
+import { historyFromPgn, isUnfinished, parseSavedGame, type SavedGame } from "../game/savedGame";
+import { buildTranscript } from "../game/transcript";
 import { AgentLog } from "./AgentLog";
 import { Board } from "./Board";
 import { KeyInput } from "./KeyInput";
@@ -28,6 +31,35 @@ const DEFAULT_SIDES: Record<Color, Side> = {
   w: { agentId: "harnessed", model: FREE_MODEL_PREFERENCES.w[0], effort: "" },
   b: { agentId: "raw", model: FREE_MODEL_PREFERENCES.b[0], effort: "" },
 };
+
+/** Saves text as a file in the user's downloads. */
+function download(filename: string, text: string, type: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const fileStamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+
+/** Harness behind an agent id, or null (Human, or a harness that no longer exists). */
+function harnessOrNull(agentId: string): HarnessConfig | null {
+  try {
+    return harnessConfigFor(agentId);
+  } catch {
+    return null;
+  }
+}
+
+const parseGame = (data: unknown) => parseSavedGame(data, harnessOrNull, sideLabel);
+
+/** "Nov 26, 14:05: Harnessed · x vs Raw · y, move 39, Black to move" */
+function describeGame(g: SavedGame): string {
+  const when = new Date(g.savedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const toMove = g.history.length % 2 === 0 ? "White" : "Black";
+  return `${g.labels.w} vs ${g.labels.b}, ${g.history.length} half-moves played, ${toMove} to move (saved ${when})`;
+}
 
 /** True for agents that call a model (everything except Human); safe for deleted harnesses. */
 function usesModel(agentId: string): boolean {
@@ -72,7 +104,11 @@ export default function App() {
   const keyRef = useRef(key);
   keyRef.current = key;
   const getKey = useCallback(() => keyRef.current, []);
-  const { state, live, rateWait, start, pause, resume, reset, humanMove, exportLog } = useGame(getKey);
+  const { state, live, rateWait, start, load, adjudicate, pause, resume, reset, humanMove, exportGame } = useGame(getKey);
+  // An unfinished game saved in this browser, offered for resuming after a reload.
+  const [stored, setStored] = useState<SavedGame | null>(null);
+  const [loadMessage, setLoadMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const gameFileRef = useRef<HTMLInputElement>(null);
   const harnesses = useHarnesses();
   const [editor, setEditor] = useState<{ color: Color; config: HarnessConfig; readOnly: boolean; isNew: boolean } | null>(null);
   const [shared, setShared] = useState<Validation | null>(() => readShareFromHash(location.hash));
@@ -121,6 +157,70 @@ export default function App() {
     if (remember) localStorage.setItem(KEY_STORAGE, key);
     else localStorage.removeItem(KEY_STORAGE);
   }, [key, remember]);
+
+  useEffect(() => {
+    loadCurrentGame().then((g) => {
+      const parsed = g && parseGame(g);
+      if (parsed?.ok && isUnfinished(parsed.game) && parsed.game.history.length > 0) setStored(parsed.game);
+    });
+  }, []);
+
+  /** Opens a saved game; returns an error message if it can't be played here. */
+  const openGame = (game: SavedGame): string | null => {
+    try {
+      load(game);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return /Unknown agent/.test(msg)
+        ? `${msg}. The game used a harness that isn't in this browser and the log doesn't include it.`
+        : msg;
+    }
+    setStored(null);
+    return null;
+  };
+
+  const loadGameFile = async (file: File) => {
+    setLoadMessage(null);
+    const text = await file.text();
+    let game: SavedGame;
+    if (/^\s*[{[]/.test(text)) {
+      let data: unknown;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return setLoadMessage({ ok: false, text: `${file.name} isn't valid JSON.` });
+      }
+      const parsed = parseGame(data);
+      if (!parsed.ok) return setLoadMessage({ ok: false, text: `Couldn't load ${file.name}: ${parsed.error}.` });
+      game = parsed.game;
+    } else {
+      // A PGN has only the moves: continue it with the agents currently picked above.
+      const pgnMoves = historyFromPgn(text);
+      if (!pgnMoves.ok) return setLoadMessage({ ok: false, text: `Couldn't load ${file.name}: ${pgnMoves.error}.` });
+      const harnesses = { w: harnessOrNull(sides.w.agentId), b: harnessOrNull(sides.b.agentId) };
+      const now = Date.now();
+      game = {
+        version: 1,
+        startedAt: now,
+        savedAt: now,
+        sides,
+        labels: { w: sideLabel(sides.w, harnesses.w), b: sideLabel(sides.b, harnesses.b) },
+        harnesses,
+        history: pgnMoves.history,
+        result: null,
+        reason: null,
+        events: [],
+      };
+    }
+    const error = openGame(game);
+    if (error) return setLoadMessage({ ok: false, text: `Couldn't load ${file.name}: ${error}` });
+    setLoadMessage({
+      ok: true,
+      text: isUnfinished(game)
+        ? `Loaded ${file.name}. Press Resume to continue the game.`
+        : `Loaded ${file.name}. This game is finished; you can replay it on the board below or download its transcript.`,
+    });
+  };
 
   useEffect(() => localStorage.setItem(SIDES_STORAGE, JSON.stringify(sides)), [sides]);
   useEffect(() => localStorage.setItem(FREE_ONLY_STORAGE, String(freeOnly)), [freeOnly]);
@@ -197,12 +297,26 @@ export default function App() {
   };
 
   const downloadLog = () => {
-    const blob = new Blob([JSON.stringify({ pgn: pgn(), ...exportLog() }, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `chess-agent-arena-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const game = exportGame();
+    if (game) download(`chess-agent-arena-${fileStamp()}.json`, JSON.stringify({ pgn: pgn(), ...game }, null, 2), "application/json");
+  };
+
+  const downloadTranscript = () => {
+    const game = exportGame();
+    if (game) download(`chess-agent-arena-${fileStamp()}.md`, buildTranscript(game, pgn()), "text/markdown");
+  };
+
+  const newGame = () => {
+    const unfinished = (state.status === "running" || state.status === "paused") && state.history.length > 0;
+    if (unfinished && !confirm("Abandon this game? It will no longer be saved in this browser. Download the log first if you want to keep it.")) return;
+    setLoadMessage(null);
+    reset();
+  };
+
+  const onAdjudicate = (value: string) => {
+    if (value !== "1/2-1/2" && value !== "1-0" && value !== "0-1") return;
+    const what = value === "1/2-1/2" ? "a draw" : value === "1-0" ? "a win for White" : "a win for Black";
+    if (confirm(`End the game now as ${what}? The PGN and log will record it as adjudicated.`)) adjudicate(value);
   };
 
   return (
@@ -269,6 +383,40 @@ export default function App() {
         </div>
       )}
 
+      {stored && state.status === "setup" && (
+        <div className="banner">
+          <span>
+            <strong>Unfinished game:</strong> {describeGame(stored)}.
+          </span>
+          <span className="spacer" />
+          <button
+            className="primary"
+            onClick={() => {
+              const error = openGame(stored);
+              setLoadMessage(error ? { ok: false, text: `Couldn't reopen the game: ${error}` } : { ok: true, text: "Game reopened. Press Resume to continue." });
+            }}
+          >
+            Reopen
+          </button>
+          <button
+            onClick={() => {
+              if (!confirm("Discard the unfinished game saved in this browser?")) return;
+              void clearCurrentGame();
+              setStored(null);
+            }}
+          >
+            Discard
+          </button>
+        </div>
+      )}
+      {loadMessage && (
+        <div className={`banner ${loadMessage.ok ? "" : "error"}`}>
+          {loadMessage.text}
+          <span className="spacer" />
+          <button onClick={() => setLoadMessage(null)}>OK</button>
+        </div>
+      )}
+
       <section className="setup">
         <KeyInput
           value={key}
@@ -311,7 +459,10 @@ export default function App() {
         <div className="center">
           <div className="controls">
             {!playing && (
-              <button className="primary" disabled={!!startProblem} title={startProblem ?? ""} onClick={() => start(sides)}>
+              <button className="primary" disabled={!!startProblem} title={startProblem ?? ""} onClick={() => {
+                  setLoadMessage(null);
+                  start(sides);
+                }}>
                 {state.status === "over" ? "Play again" : "Start game"}
               </button>
             )}
@@ -321,7 +472,41 @@ export default function App() {
                 Resume
               </button>
             )}
-            {(playing || state.status === "over") && <button onClick={reset}>New game</button>}
+            {playing && (
+              <select
+                value=""
+                onChange={(e) => onAdjudicate(e.target.value)}
+                aria-label="Adjudicate"
+                title="End the game now with a result you decide, e.g. a dead-drawn position the agents would keep playing"
+              >
+                <option value="">Adjudicate…</option>
+                <option value="1/2-1/2">Draw (½-½)</option>
+                <option value="1-0">White wins (1-0)</option>
+                <option value="0-1">Black wins (0-1)</option>
+              </select>
+            )}
+            {(playing || state.status === "over") && <button onClick={newGame}>New game</button>}
+            {!playing && (
+              <>
+                <input
+                  ref={gameFileRef}
+                  type="file"
+                  accept=".json,.pgn,application/json,application/x-chess-pgn"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void loadGameFile(f);
+                  }}
+                />
+                <button
+                  onClick={() => gameFileRef.current?.click()}
+                  title="Continue a game from a downloaded log (JSON), or from a PGN using the agents picked above"
+                >
+                  Load game…
+                </button>
+              </>
+            )}
             {!playing && (
               <button onClick={() => setSides((s) => ({ w: s.b, b: s.w }))} title="Swap the White and Black setups">
                 Swap colours
@@ -345,7 +530,12 @@ export default function App() {
           {state.history.length > 0 && (
             <div className="controls">
               <button onClick={copyPgn}>{copied ? "Copied!" : "Copy PGN"}</button>
-              <button onClick={downloadLog}>Download log (JSON)</button>
+              <button onClick={downloadTranscript} title="Every prompt, reasoning and reply, turn by turn, as a readable Markdown file">
+                Download transcript (.md)
+              </button>
+              <button onClick={downloadLog} title="The whole game as data; load it later with Load game… to continue">
+                Download log (JSON)
+              </button>
             </div>
           )}
         </div>

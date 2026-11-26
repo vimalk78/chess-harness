@@ -1,20 +1,20 @@
 // Connects the referee to React state: starts/pauses/stops games, routes human
-// board moves to the Human agent, and collects every event for the log download.
+// board moves to the Human agent, collects every event for the log download, and
+// saves the game in the browser after every event so it can be resumed later.
 
 import { useCallback, useRef, useState } from "react";
 import { getAgent, harnessConfigFor } from "../agents/registry";
 import { legalSan } from "../agents/chessUtil";
-import type { AgentDeps, Color, GameView, LogEntry, ReasoningEffort, StreamDelta } from "../agents/types";
+import type { AgentDeps, Color, GameView, LogEntry, StreamDelta } from "../agents/types";
 import type { HarnessConfig } from "../harness/config";
+import { harnessDefinition } from "../harness/runner";
 import { GameRunner, type GameEvent, type GameResult } from "../game/referee";
+import { clearCurrentGame, saveCurrentGame } from "../game/gameStore";
+import { isUnfinished, replay, type SavedGame, type SideConfig } from "../game/savedGame";
 import { OpenRouterClient } from "../llm/openrouter";
 import { countEvent } from "../analytics";
 
-export interface SideConfig {
-  agentId: string;
-  model: string;
-  effort: ReasoningEffort | "";
-}
+export type { SideConfig } from "../game/savedGame";
 
 export type PanelEntry = LogEntry | { kind: "illegal"; text: string } | { kind: "turn"; text: string };
 
@@ -56,22 +56,52 @@ const initialState: GameState = {
   harnesses: null,
 };
 
-export function sideLabel(side: SideConfig): string {
-  let def;
-  try {
-    def = getAgent(side.agentId);
-  } catch {
-    return side.agentId;
+/** "Harnessed · some/model (high)", or the agent's name for Human. Pass `harness` to label a saved game. */
+export function sideLabel(side: SideConfig, harness?: HarnessConfig | null): string {
+  let name: string;
+  if (harness) {
+    name = harness.name;
+  } else {
+    let def;
+    try {
+      def = getAgent(side.agentId);
+    } catch {
+      return side.agentId;
+    }
+    if (!def.needsModel) return def.label;
+    name = def.label;
   }
-  if (!def.needsModel) return def.label;
-  return `${def.label.replace(/ \(.*\)$/, "")} · ${side.model}${side.effort ? ` (${side.effort})` : ""}`;
+  return `${name.replace(/ \(.*\)$/, "")} · ${side.model}${side.effort ? ` (${side.effort})` : ""}`;
 }
+
+/** The React state for a saved game, rebuilt by replaying its recorded events. */
+function restoreState(game: SavedGame, status: GameState["status"]): GameState {
+  let s: GameState = { ...initialState, sides: game.sides, labels: game.labels, harnesses: game.harnesses };
+  for (const { event } of game.events) s = reduce(s, event);
+  const replayed = replay(game.history);
+  return {
+    ...s,
+    status,
+    fen: replayed.ok ? replayed.chess.fen() : START_FEN,
+    history: game.history,
+    thinking: null,
+    humanToMove: null,
+    pauseError: null,
+    result: status === "over" ? game.result : null,
+    reason: status === "over" ? game.reason : null,
+  };
+}
+
+export const ADJUDICATED = "adjudicated by the person watching";
 
 export function useGame(getKey: () => string) {
   const [state, setState] = useState<GameState>(initialState);
   const runnerRef = useRef<GameRunner | null>(null);
   const humanRef = useRef<{ resolve: (m: string) => void; game: GameView } | null>(null);
   const eventsRef = useRef<{ t: number; event: GameEvent }[]>([]);
+  // The game being played, as it will be saved: everything except events lives here.
+  const gameRef = useRef<Omit<SavedGame, "events" | "savedAt"> | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Streamed model output, buffered and flushed to React at most once per animation frame.
   const [live, setLive] = useState<Record<Color, LiveOutput | null>>({ w: null, b: null });
   const liveBuf = useRef<Record<Color, LiveOutput | null>>({ w: null, b: null });
@@ -103,28 +133,49 @@ export function useGame(getKey: () => string) {
     onWait: (w) => setRateWait(w ? { model: w.model, until: Date.now() + w.waitMs, reason: w.reason } : null),
   });
 
-  const start = useCallback(
-    (sides: Record<Color, SideConfig>) => {
-      runnerRef.current?.stop();
-      eventsRef.current = [];
-      humanRef.current = null;
+  const snapshot = useCallback((): SavedGame | null => {
+    const g = gameRef.current;
+    return g && { ...g, savedAt: Date.now(), events: eventsRef.current };
+  }, []);
 
+  const save = useCallback(
+    (now = false) => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      const write = () => {
+        saveTimer.current = null;
+        const g = snapshot();
+        if (g) void saveCurrentGame(g);
+      };
+      if (now) write();
+      else saveTimer.current = setTimeout(write, 500);
+    },
+    [snapshot],
+  );
+
+  /** Runs a game from its saved form: a fresh one (no moves) or one being resumed. */
+  const launch = useCallback(
+    (game: SavedGame, paused: boolean) => {
       const deps: AgentDeps = {
         llm: llmRef.current!,
-        waitForHumanMove: (game) =>
+        waitForHumanMove: (view) =>
           new Promise<string>((resolve, reject) => {
-            humanRef.current = { resolve, game };
-            setState((s) => ({ ...s, humanToMove: game.myColor }));
-            game.signal.addEventListener("abort", () => reject(new Error("aborted")));
+            humanRef.current = { resolve, game: view };
+            setState((s) => ({ ...s, humanToMove: view.myColor }));
+            view.signal.addEventListener("abort", () => reject(new Error("aborted")));
           }),
       };
-      const make = (c: Color) =>
-        getAgent(sides[c].agentId).create(
-          { model: sides[c].model.trim(), reasoningEffort: sides[c].effort || undefined },
-          deps,
-        );
+      // Agents are built from the harness snapshot, so a resumed game plays exactly as it began
+      // even if the harness was edited or deleted since (or never existed in this browser).
+      const make = (c: Color) => {
+        const h = game.harnesses[c];
+        const def = h ? harnessDefinition(h, game.sides[c].agentId) : getAgent(game.sides[c].agentId);
+        return def.create({ model: game.sides[c].model.trim(), reasoningEffort: game.sides[c].effort || undefined }, deps);
+      };
+      const white = make("w");
+      const black = make("b");
 
-      const humans = (["w", "b"] as Color[]).filter((c) => !getAgent(sides[c].agentId).needsModel).length;
+      const humans = (["w", "b"] as Color[]).filter((c) => !game.harnesses[c]).length;
       const mode = humans ? "human vs LLM" : "LLM vs LLM";
       const onStream = (color: Color, d: StreamDelta) => {
         if (runnerRef.current !== runner) return;
@@ -134,28 +185,90 @@ export function useGame(getKey: () => string) {
         if (d.content) buf.text += d.content;
         flushLive();
       };
-      const runner: GameRunner = new GameRunner({ white: make("w"), black: make("b"), onStream }, (event) => {
-        if (runnerRef.current !== runner) return; // event from a game that was replaced
-        eventsRef.current.push({ t: Date.now(), event });
-        if (event.type === "log" || event.type === "turnStart") clearLive(event.color);
-        if (event.type === "paused" || event.type === "gameOver") clearLive();
-        if (event.type === "gameOver" && event.result !== "*") countEvent("game-finish", mode);
-        setState((s) => reduce(s, event));
-      });
+      const runner: GameRunner = new GameRunner(
+        { white, black, onStream, startHistory: game.history, startPaused: paused },
+        (event) => {
+          if (runnerRef.current !== runner) return; // event from a game that was replaced
+          eventsRef.current.push({ t: Date.now(), event });
+          const g = gameRef.current!;
+          if (event.type === "move") g.history = event.history;
+          if (event.type === "gameOver") {
+            g.result = event.result;
+            g.reason = event.reason;
+          }
+          if (event.type === "log" || event.type === "turnStart") clearLive(event.color);
+          if (event.type === "paused" || event.type === "gameOver") clearLive();
+          if (event.type === "gameOver" && event.result !== "*") countEvent("game-finish", mode);
+          // A stopped game stays saved as it was, so it can still be resumed.
+          if (!(event.type === "gameOver" && event.result === "*")) save(event.type === "gameOver" || event.type === "paused");
+          setState((s) => reduce(s, event));
+        },
+      );
+
+      runnerRef.current?.stop();
+      humanRef.current = null;
       runnerRef.current = runner;
+      eventsRef.current = [...game.events];
+      gameRef.current = { ...game, result: null, reason: null };
+      delete (gameRef.current as Partial<SavedGame>).events;
       clearLive();
-      countEvent("game-start", mode);
-      setState({
-        ...initialState,
-        status: "running",
-        sides,
-        labels: { w: sideLabel(sides.w), b: sideLabel(sides.b) },
-        harnesses: { w: harnessConfigFor(sides.w.agentId), b: harnessConfigFor(sides.b.agentId) },
-      });
+      setState(restoreState(game, paused ? "paused" : "running"));
+      save(true);
       void runner.start();
+      return mode;
     },
-    [clearLive, flushLive],
+    [clearLive, flushLive, save],
   );
+
+  const start = useCallback(
+    (sides: Record<Color, SideConfig>) => {
+      const harnesses = { w: harnessConfigFor(sides.w.agentId), b: harnessConfigFor(sides.b.agentId) };
+      const now = Date.now();
+      const mode = launch(
+        {
+          version: 1,
+          startedAt: now,
+          savedAt: now,
+          sides,
+          labels: { w: sideLabel(sides.w, harnesses.w), b: sideLabel(sides.b, harnesses.b) },
+          harnesses,
+          history: [],
+          result: null,
+          reason: null,
+          events: [],
+        },
+        false,
+      );
+      countEvent("game-start", mode);
+    },
+    [launch],
+  );
+
+  /**
+   * Opens a saved game or downloaded log. An unfinished game opens paused (press Resume
+   * to continue); a finished one opens for viewing and downloading only.
+   * Throws if the game can't be set up (e.g. an unknown agent).
+   */
+  const load = useCallback(
+    (game: SavedGame) => {
+      if (isUnfinished(game)) {
+        launch(game, true);
+        return;
+      }
+      const r = runnerRef.current;
+      runnerRef.current = null;
+      r?.stop();
+      humanRef.current = null;
+      eventsRef.current = [...game.events];
+      gameRef.current = { ...game };
+      delete (gameRef.current as Partial<SavedGame>).events;
+      clearLive();
+      setState(restoreState(game, "over"));
+    },
+    [launch, clearLive],
+  );
+
+  const adjudicate = useCallback((result: Exclude<GameResult, "*">) => runnerRef.current?.adjudicate(result, ADJUDICATED), []);
 
   const pause = useCallback(() => runnerRef.current?.pause(), []);
   const resume = useCallback(() => runnerRef.current?.resume(), []);
@@ -164,6 +277,10 @@ export function useGame(getKey: () => string) {
     runnerRef.current = null;
     r?.stop();
     humanRef.current = null;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    gameRef.current = null;
+    void clearCurrentGame();
     clearLive();
     setState(initialState);
   }, [clearLive]);
@@ -181,21 +298,12 @@ export function useGame(getKey: () => string) {
     return true;
   }, []);
 
-  const exportLog = useCallback(
-    () => ({
-      sides: state.sides,
-      harnesses: state.harnesses, // full configs, so anyone can see exactly what each side sent
-      result: state.result,
-      reason: state.reason,
-      history: state.history,
-      events: eventsRef.current,
-    }),
-    [state],
-  );
+  /** The game in its saved form: also the downloadable log, which can be loaded to resume. */
+  const exportGame = snapshot;
 
   // A wait only matters while the game is running.
   const visibleWait = state.status === "running" ? rateWait : null;
-  return { state, live, rateWait: visibleWait, start, pause, resume, reset, humanMove, exportLog };
+  return { state, live, rateWait: visibleWait, start, load, adjudicate, pause, resume, reset, humanMove, exportGame };
 }
 
 function reduce(s: GameState, e: GameEvent): GameState {

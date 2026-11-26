@@ -41,7 +41,7 @@ To update the site, run `npm run build` again. To take it down, run `tailscale f
 
 The app loads OpenRouter's live model list. "Show free models only" is on by default, and the default matchup uses two free NVIDIA models: a small one with the harness (`nvidia/nemotron-3.5-lightning:free`, 3B active parameters) against an 18x larger one without it (`nvidia/nemotron-3-ultra-550b-a55b:free`, 55B active). Google's free Gemma models are avoided as defaults because they're often rate-limited by their provider.
 
-Free models are limited to **20 requests/minute** and **50 requests/day** (1000/day once you've bought $10 of credits). The app spaces calls out to stay under the per-minute limit and retries if it gets a 429 anyway. When the daily limit is reached, the game pauses with a message; Resume continues it the next day (keep the tab open, or note the PGN). Requests used today are shown under the key field.
+Free models are limited to **20 requests/minute** and **50 requests/day** (1000/day once you've bought $10 of credits). The app spaces calls out to stay under the per-minute limit and retries if it gets a 429 anyway. When the daily limit is reached, the game pauses with a message; Resume continues it the next day. The game is saved in your browser, so you can close the tab and reopen it later (see [Long games](#long-games)). Requests used today are shown under the key field.
 
 A full game usually takes 80–200 requests, so on 50/day expect part of a game per day. Human vs LLM uses about half as many.
 
@@ -79,6 +79,13 @@ Context blocks are facts, not advice: no engine, no evaluation, no search, no op
 - **The referee** (chess.js) is the only judge of legality, the same for both sides. Moves can be SAN (`Nf3`) or UCI (`g1f3`). Three rejected moves in one turn forfeits the game. A game is a draw after 300 half-moves.
 - API errors (bad key, no credit, rate limits) pause the game instead of counting against the agent; Resume replays the turn.
 - Model output **streams live** into the side panels, reasoning included when OpenRouter returns it. Every prompt, reply, token count and cost is kept. The downloaded JSON log includes both sides' full harness configs.
+
+### Long games
+
+- **Saved as you go.** After every move the game is saved in your browser (IndexedDB), with every prompt and reasoning text. Reload or close the tab, and the page offers to **reopen** the unfinished game; press Resume to carry on.
+- **Continue anywhere.** *Download log (JSON)* saves the whole game. *Load game…* opens it again, in any browser, with the same harnesses and models it started with. A PGN works too: the moves are loaded and the agents picked above play on.
+- **Adjudicate.** The agents can't agree a draw, so a dead-drawn position would be played out to the 300 half-move limit. The *Adjudicate* menu ends the game as a draw or a win for either side; the PGN and log record it as adjudicated.
+- **Transcript.** *Download transcript (.md)* writes the game as readable Markdown: the players and their harnesses, the PGN, then every turn with the prompt sent, the reasoning, the reply, re-asks, referee rulings, time taken and tokens used.
 
 ## Code-level agents
 
@@ -146,7 +153,7 @@ interface GameView {
 ```
 src/agents/   Agent interface, registry, Human agent, move parser
 src/harness/  Harness configs, presets, runner, template variables, context blocks, saving/sharing
-src/game/     Referee (turn loop, legality, forfeits, pause) and PGN
+src/game/     Referee (turn loop, legality, forfeits, pause, adjudication), PGN, saved games, transcripts
 src/llm/      OpenRouter client
 src/ui/       React components and the useGame hook
 docs/         Design spec and plan

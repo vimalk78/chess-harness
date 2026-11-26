@@ -24,6 +24,10 @@ export interface RefereeOptions {
   maxPlies?: number;
   /** Live model output from the side to move (for display only). */
   onStream?: (color: Color, delta: StreamDelta) => void;
+  /** Continue a saved game: SAN moves already played. Throws if they aren't a legal game. */
+  startHistory?: string[];
+  /** Start paused, so nothing is asked until resume() (used when reopening a saved game). */
+  startPaused?: boolean;
 }
 
 const UCI = /^([a-h][1-8])([a-h][1-8])([qrbn])?$/;
@@ -33,16 +37,27 @@ const colorName = (c: Color) => (c === "w" ? "White" : "Black");
 
 export class GameRunner {
   private chess = new Chess();
-  private readonly opts: Required<Omit<RefereeOptions, "onStream">> & Pick<RefereeOptions, "onStream">;
+  private readonly opts: Required<Pick<RefereeOptions, "white" | "black" | "maxIllegalAttempts" | "maxPlies">> &
+    Pick<RefereeOptions, "onStream">;
   private readonly emit: (e: GameEvent) => void;
   private turnAbort: AbortController | null = null;
   private pausedBy: "user" | "error" | null = null;
   private resumeWaiter: (() => void) | null = null;
   private stopped = false;
+  private finished = false;
 
   constructor(opts: RefereeOptions, onEvent: (e: GameEvent) => void) {
-    this.opts = { maxIllegalAttempts: 3, maxPlies: 300, ...opts };
+    const { startHistory, startPaused, ...rest } = opts;
+    this.opts = { maxIllegalAttempts: 3, maxPlies: 300, ...rest };
     this.emit = onEvent;
+    for (const san of startHistory ?? []) {
+      try {
+        this.chess.move(san);
+      } catch {
+        throw new Error(`Saved game has an illegal move: ${san} (after ${this.chess.history().length} half-moves)`);
+      }
+    }
+    if (startPaused) this.pausedBy = "user";
   }
 
   get history(): string[] {
@@ -80,6 +95,20 @@ export class GameRunner {
     this.resumeWaiter = null;
   }
 
+  /**
+   * Ends the game now with a result decided by the person watching (e.g. a dead-drawn
+   * position the agents would otherwise play out). Aborts any turn in progress.
+   */
+  adjudicate(result: Exclude<GameResult, "*">, reason: string): void {
+    if (this.finished) return;
+    this.finished = true;
+    this.stopped = true;
+    this.turnAbort?.abort();
+    this.emit({ type: "gameOver", result, reason });
+    this.resumeWaiter?.();
+    this.resumeWaiter = null;
+  }
+
   private waitIfPaused(): Promise<void> {
     if (!this.pausedBy || this.stopped) return Promise.resolve();
     return new Promise((resolve) => (this.resumeWaiter = resolve));
@@ -87,7 +116,11 @@ export class GameRunner {
 
   /** Runs until the game ends. Resolves after the gameOver event. */
   async start(): Promise<void> {
-    const end = (result: GameResult, reason: string) => this.emit({ type: "gameOver", result, reason });
+    const end = (result: GameResult, reason: string) => {
+      if (this.finished) return; // already adjudicated
+      this.finished = true;
+      this.emit({ type: "gameOver", result, reason });
+    };
 
     while (true) {
       const over = this.checkGameOver();
