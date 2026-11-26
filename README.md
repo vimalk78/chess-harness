@@ -40,6 +40,7 @@ A **harness** decides what the model sees each turn and what happens to its answ
 | **Harnessed + tactical facts** | Everything in Harnessed, plus attacked/undefended pieces, every capture and every check, computed from the rules. | Same as Harnessed. |
 | **Harnessed + notes** | Everything in Harnessed, plus memory: the model ends each reply with a short `NOTES:` block (plan, threats), and gets its own notes back next move. | Same as Harnessed. |
 | **Facts as lists (no board, no FEN)** | The position in words: every piece and its square, what the opponent's last move newly attacks, material, game state, moves that would leave a piece hanging (borderline: one move ahead), and legal moves grouped by piece. | Same as Harnessed. |
+| **Attacker (aggressive style)** | The same turn prompt as Harnessed + tactical facts, with a different system prompt: play for the initiative, forcing moves first (checks, captures, threats), attack the king, sacrifice only with a concrete follow-up, gambits welcome. | Same as Harnessed. |
 
 **Human** is also available on either side: you drag pieces on the board.
 
