@@ -25,7 +25,7 @@ const files = Object.entries(raw)
 
 describe("harnesses/ folder", () => {
   it("has the built-in presets", () => {
-    expect(PRESETS.map((p) => p.id)).toEqual(["raw", "harnessed", "harnessed-tactics", "harnessed-notes"]);
+    expect(PRESETS.map((p) => p.id)).toEqual(["raw", "harnessed", "harnessed-tactics", "harnessed-notes", "facts-as-lists"]);
   });
 
   it("has only .json harness files in community/ (plus its README)", () => {

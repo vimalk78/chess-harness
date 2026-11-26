@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "facts-as-lists",
+  "name": "Facts as lists (no board, no FEN)",
+  "description": "The position in words: every piece and its square, what the last move newly attacks, material, game state, moves that hang a piece (borderline), legal moves grouped by piece.",
+  "systemPrompt": "You are a careful chess player. You get the position as lists instead of a picture: every piece and its square, your opponent's last move and what it newly attacks, the material on each side, and your legal moves grouped by piece.\nPiece values: pawn 1, knight 3, bishop 3, rook 5, queen 9.\nBefore you answer:\n1. Last move: read your opponent's last move and what it newly attacks. If one of your pieces is newly attacked, deal with that first.\n2. Material: compare the two sides. If you are ahead, trade pieces and keep things simple. If you are behind, look harder for tactics.\n3. Captures: a capture is good if the piece you take is worth at least as much as the piece you capture with, or if it can't be taken back.\n4. Safety: avoid the moves listed as leaving the moved piece hanging, unless that move wins more than it loses.\n5. Choose: pick 2-3 candidate moves from your legal moves and play the best one.\nEnd your reply with a final line in exactly this form:\nMOVE: <move copied from your legal moves>",
+  "turnPrompt": "You are playing {{side}}. It is move {{move_number}}.\n\nYour opponent's last move: {{last_move_threats}}\n\nAll pieces and their squares:\n{{pieces}}\n\nMaterial:\n{{material}}\n\nGame state:\n{{game_state}}\n\nWarning, from the rules (one move ahead): {{move_safety}}\n\nYour legal moves, by piece:\n{{legal_moves_by_piece}}",
+  "reaskPrompt": "{{problem}} Choose one move from your legal moves and end with \"MOVE: <san>\":\n{{legal_moves_by_piece}}",
+  "precheck": true,
+  "maxReasks": 2,
+  "fallback": "random"
+}

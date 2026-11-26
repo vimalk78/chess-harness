@@ -39,6 +39,7 @@ A **harness** decides what the model sees each turn and what happens to its answ
 | **Harnessed** | A system prompt with a procedure (threats → opportunities → loose pieces → candidates → safety → `MOVE: <san>`), plus FEN, an ASCII board, the moves so far and the legal-move list. | Pre-checked against the rules, re-asked up to 2 times with the exact problem, and as a last resort a random legal move (noted in the log). |
 | **Harnessed + tactical facts** | Everything in Harnessed, plus attacked/undefended pieces, every capture and every check, computed from the rules. | Same as Harnessed. |
 | **Harnessed + notes** | Everything in Harnessed, plus memory: the model ends each reply with a short `NOTES:` block (plan, threats), and gets its own notes back next move. | Same as Harnessed. |
+| **Facts as lists (no board, no FEN)** | The position in words: every piece and its square, what the opponent's last move newly attacks, material, game state, moves that would leave a piece hanging (borderline: one move ahead), and legal moves grouped by piece. | Same as Harnessed. |
 
 **Human** is also available on either side: you drag pieces on the board.
 
