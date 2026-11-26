@@ -279,7 +279,8 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
               <>
                 <p className="hint">
                   {readOnly ? "Variables a harness can use." : `Click to insert into the ${FIELD_LABEL[lastField].split(" (")[0].toLowerCase()}.`}{" "}
-                  Context blocks are computed from the rules before each call; the model never calls them.
+                  Context blocks are computed from the rules before each call; the model never calls them.{" "}
+                  <span className="used-key">Highlighted</span> = used by this harness.
                 </p>
                 <VariableList title="Game" items={BASE_VARIABLES} used={used} onInsert={insert} disabled={readOnly} />
                 <VariableList title="Context blocks" items={CONTEXT_BLOCKS} used={used} onInsert={insert} disabled={readOnly} />

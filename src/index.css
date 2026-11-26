@@ -245,6 +245,9 @@ textarea:read-only, input:read-only { opacity: 0.85; }
 .var { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; text-align: left; padding: 6px 8px; font-weight: 400; }
 .var code { font-size: 0.78rem; color: var(--accent); }
 .var.used { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+/* Read-only harnesses: the list is for reading, so don't dim it like a disabled control. */
+.var:disabled { opacity: 1; cursor: default; }
+.used-key { padding: 0 4px; border: 1px solid var(--accent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
 .var-label { font-weight: 600; font-size: 0.82rem; }
 .var-desc { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
 .tag { font-style: normal; font-size: 0.68rem; margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--bad-bg); color: var(--bad); }
