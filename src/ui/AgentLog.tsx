@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import type { Color } from "../agents/types";
 import type { LiveOutput, PanelEntry } from "./useGame";
 
@@ -13,12 +13,36 @@ interface Props {
   now: number;
 }
 
+/**
+ * Keeps a scrollable element pinned to its bottom as content grows, unless the user has
+ * scrolled up to read; scrolling back to the bottom pins it again.
+ */
+function useStickToBottom<T extends HTMLElement>(trigger: unknown) {
+  const ref = useRef<T>(null);
+  const pinned = useRef(true);
+  const onScroll = useCallback(() => {
+    const el = ref.current;
+    if (el) pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }, []);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [trigger]);
+  return { ref, onScroll };
+}
+
+/** Streaming reasoning in its own scroll box; remounts (and re-pins) for each model call. */
+function LiveReasoning({ text }: { text: string }) {
+  const { ref, onScroll } = useStickToBottom<HTMLPreElement>(text.length);
+  return (
+    <pre className="live-reasoning" ref={ref} onScroll={onScroll}>
+      {text}
+    </pre>
+  );
+}
+
 export function AgentLog({ color, title, entries, live, thinkingSince, isHuman, now }: Props) {
-  const listRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [entries.length, live?.text.length, live?.reasoning.length]);
+  const list = useStickToBottom<HTMLDivElement>(`${entries.length}:${live?.text.length ?? 0}:${live?.reasoning.length ?? 0}`);
 
   let prompt = 0;
   let completion = 0;
@@ -61,7 +85,7 @@ export function AgentLog({ color, title, entries, live, thinkingSince, isHuman, 
           </div>
         )}
       </header>
-      <div className="log" ref={listRef}>
+      <div className="log" ref={list.ref} onScroll={list.onScroll}>
         {entries.length === 0 && !(live && (live.reasoning || live.text)) && (
           <p className="empty">{isHuman ? "Your moves will appear here." : "Prompts and replies will appear here."}</p>
         )}
@@ -71,7 +95,7 @@ export function AgentLog({ color, title, entries, live, thinkingSince, isHuman, 
         {live && (live.reasoning || live.text) && (
           <div className="entry live">
             <div className="live-label">Live</div>
-            {live.reasoning && <pre className="live-reasoning">{live.reasoning}</pre>}
+            {live.reasoning && <LiveReasoning text={live.reasoning} />}
             {live.text && <pre>{live.text}</pre>}
           </div>
         )}
