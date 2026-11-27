@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
 import { engineDefinition } from "../agents/engine";
+import { evaluatePositions, reviewMoves } from "../game/review";
 import type { AgentDeps, GameView } from "../agents/types";
 import { uciToSan, UciEngine } from "./uci";
 
@@ -65,4 +66,21 @@ describe("Stockfish agent (real engine)", () => {
     }
   }, 30_000);
 
+  it("reviews a game: every position evaluated, the losing blunder found", async () => {
+    const { engine, quit } = nodeEngine();
+    try {
+      const fools = ["f3", "e5", "g4", "Qh4#"];
+      const progress: number[] = [];
+      const evals = await evaluatePositions(fools, engine, { depth: 8, onProgress: (d) => progress.push(d) });
+      expect(progress).toEqual([1, 2, 3, 4, 5]);
+      expect(evals[3]).toMatchObject({ mate: 1, best: "d8h4" });
+      expect(evals[4]).toEqual({ mate: 0 });
+      const r = reviewMoves(fools, evals, "SF", 8);
+      expect(r.moves[2].class).toBe("blunder");
+      expect(r.moves[3]).toMatchObject({ best: "Qh4#", loss: 0 });
+      expect(r.white.blunders).toBeGreaterThanOrEqual(1);
+    } finally {
+      quit();
+    }
+  }, 30_000);
 });

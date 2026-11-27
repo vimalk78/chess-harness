@@ -28,6 +28,8 @@ export interface SavedGame {
   reason: string | null;
   /** Everything the referee reported, including every prompt, reply and reasoning text. */
   events: { t: number; event: GameEvent }[];
+  /** The site's commit the game was started on (older logs don't have it). */
+  arenaVersion?: string;
 }
 
 export type ParsedGame = { ok: true; game: SavedGame } | { ok: false; error: string };
@@ -126,6 +128,7 @@ export function parseSavedGame(
       result,
       reason: typeof data.reason === "string" ? data.reason : null,
       events,
+      ...(typeof data.arenaVersion === "string" ? { arenaVersion: data.arenaVersion } : {}),
     },
   };
 }

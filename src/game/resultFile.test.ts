@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPgn } from "./pgn";
-import { buildResultFile, resultFileName, sideStats, terminationOf, validateResultFile, type ResultFile } from "./resultFile";
+import { buildResultFile, resultCommitMessage, resultFileName, sideStats, terminationOf, validateResultFile, type ResultFile } from "./resultFile";
 import type { SavedGame } from "./savedGame";
 import { ATTACKER_PRESET, HARNESSED_PRESET, LIBRARY, PRESETS } from "../harness/presets";
 
@@ -73,6 +73,37 @@ describe("result files", () => {
     expect(validateResultFile(f, LIBRARY).ok).toBe(true);
   });
 
+  it("records every move: time, calls, tokens, rejections, re-asks, random fallbacks", () => {
+    const f = build();
+    expect(f.moves).toHaveLength(4);
+    expect(f.moves![0]).toMatchObject({ ply: 1, color: "w", san: "f3", requests: 2, emptyReplies: 1, random: true, reply: "MOVE: Ke2", reasks: 1 });
+    expect(f.moves![2]).toMatchObject({ ply: 3, san: "g4", rejected: ["Kf2"], requests: 2, reasks: 0, reply: "MOVE: g4" });
+    expect(f.moves![3]).toMatchObject({ san: "Qh4#", requests: 1, costUsd: 0.001 });
+    expect(validateResultFile(JSON.parse(JSON.stringify(f)), LIBRARY).ok).toBe(true);
+    const broken = { ...f, moves: f.moves!.map((m, i) => (i === 2 ? { ...m, san: "g3" } : m)) };
+    expect(validateResultFile(broken, LIBRARY)).toMatchObject({ ok: false, error: expect.stringMatching(/moves\[2\] doesn't match/) });
+    expect(validateResultFile({ ...f, moves: f.moves!.slice(1) }, LIBRARY).ok).toBe(false);
+  });
+
+  it("adds Stockfish's review to the moves and per side", () => {
+    const review = {
+      engine: "SF", depth: 12,
+      moves: [{ eval: 0, loss: 0, winDrop: 0, accuracy: 100 }, { eval: 0, loss: 0, winDrop: 0, accuracy: 100 }, { eval: -1000, mate: -1, best: "e4", loss: 900, winDrop: 40, accuracy: 0, class: "blunder" as const }, { eval: -1000, mate: 0, loss: 0, winDrop: 0, accuracy: 100 }],
+      white: { accuracy: 50, avgLoss: 450, inaccuracies: 0, mistakes: 0, blunders: 1 },
+      black: { accuracy: 100, avgLoss: 0, inaccuracies: 0, mistakes: 0, blunders: 0 },
+    };
+    const f = build(game(), { review });
+    expect(f.moves![2]).toMatchObject({ san: "g4", rejected: ["Kf2"], class: "blunder", best: "e4" });
+    expect(f.review).toEqual({ engine: "SF", depth: 12, white: review.white, black: review.black });
+    expect(validateResultFile(f, LIBRARY).ok).toBe(true);
+    expect(validateResultFile({ ...f, review: { ...f.review, white: { accuracy: 50 } } }, LIBRARY).ok).toBe(false);
+  });
+
+  it("uses the site version the game was started on, when the log has it", () => {
+    expect(build(game({ arenaVersion: "1234abc" })).arenaVersion).toBe("1234abc");
+    expect(build().arenaVersion).toBe("abc1234");
+  });
+
   it("records engine sides with their strength, and validates them", () => {
     const f = build(game({ sides: { ...game().sides, w: { agentId: "stockfish:1600", model: "", effort: "" } }, harnesses: { w: null, b: ATTACKER_PRESET }, labels: { w: "Stockfish 19 lite · Elo 1600", b: "x" } }));
     expect(f.white).toEqual({ player: "Stockfish 19 lite · Elo 1600", kind: "engine", engine: { id: "stockfish:1600", name: "Stockfish 19 lite", elo: 1600 } });
@@ -129,5 +160,58 @@ describe("result files", () => {
     const rep = ["Nf3", "Nf6", "Ng1", "Ng8", "Nf3", "Nf6", "Ng1", "Ng8"];
     expect(validateResultFile(build(game({ history: rep, result: "1/2-1/2", reason: "threefold repetition" })), LIBRARY).ok).toBe(true);
     expect(validateResultFile(build(game({ history: rep.slice(0, 6), result: "1/2-1/2", reason: "threefold repetition" })), LIBRARY).ok).toBe(false);
+  });
+});
+
+describe("resultCommitMessage", () => {
+  it("names the players, the result and the review", () => {
+    const file = {
+      format: "chess-agent-arena-result",
+      version: 1,
+      startedAt: "2026-11-27T14:00:52.847Z",
+      finishedAt: "2026-11-27T14:14:20.001Z",
+      arenaVersion: "abc1234",
+      submittedBy: "someone",
+      comment: "Engine test.",
+      result: "1-0",
+      termination: "checkmate",
+      reason: "checkmate",
+      plies: 3,
+      pgn: "",
+      white: { player: "Stockfish 19 lite · Elo 1600", kind: "engine", engine: { id: "stockfish:1600", name: "Stockfish 19 lite", elo: 1600 } },
+      black: {
+        player: "Attacker + notes · baidu/ernie-5.5-flash-preview:free",
+        kind: "llm",
+        model: "baidu/ernie-5.5-flash-preview:free",
+        harness: { id: "attacker-notes", name: "Attacker + notes", source: "preset" },
+        stats: { requests: 13, promptTokens: 12528, completionTokens: 168317, reasks: 0, refereeRejections: 1, randomMoves: 0, emptyReplies: 0, analysisRounds: 0, costUsd: 0 },
+      },
+      moves: [
+        { ply: 1, color: "w", san: "e4", requests: 0, promptTokens: 0, completionTokens: 0, reasoningChars: 0, reasks: 0, eval: 30, loss: 0, winDrop: 0, accuracy: 100 },
+        { ply: 2, color: "b", san: "f6", requests: 1, promptTokens: 0, completionTokens: 0, reasoningChars: 0, reasks: 0, eval: 90, best: "e5", loss: 60, winDrop: 16, accuracy: 30, class: "blunder" },
+        { ply: 3, color: "w", san: "d4", requests: 0, promptTokens: 0, completionTokens: 0, reasoningChars: 0, reasks: 0, eval: 90, loss: 0, winDrop: 0, accuracy: 100 },
+      ],
+      review: {
+        engine: "Stockfish 19 lite",
+        depth: 12,
+        white: { accuracy: 100, avgLoss: 0, inaccuracies: 0, mistakes: 0, blunders: 0 },
+        black: { accuracy: 30, avgLoss: 60, inaccuracies: 0, mistakes: 0, blunders: 1 },
+      },
+    } satisfies ResultFile;
+    const m = resultCommitMessage(file);
+    expect(m.title).toBe("Result: Stockfish 1600 vs Attacker + notes (ernie-5.5-flash-preview), 1-0 (checkmate, 2 moves)");
+    expect(m.description).toBe(
+      [
+        "White: Stockfish 19 lite, Elo 1600",
+        "Black: Attacker + notes (preset) · baidu/ernie-5.5-flash-preview:free · 13 requests · 180,845 tokens · $0.00 · 1 rejected",
+        "",
+        "Review (Stockfish 19 lite, depth 12): White 100% accuracy, 0 blunders, 0 mistakes; Black 30% accuracy, 1 blunder, 0 mistakes",
+        "Blunders: 1...f6 (best e5)",
+        "",
+        "Engine test.",
+        "",
+        "Submitted by someone",
+      ].join("\n"),
+    );
   });
 });

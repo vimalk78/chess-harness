@@ -6,9 +6,10 @@ import { validateResultFile } from "./resultFile";
 const files = import.meta.glob<string>("../../results/*.json", { eager: true, query: "?raw", import: "default" });
 
 describe("results/", () => {
-  it("has only .json results and a README", () => {
-    const all = Object.keys(import.meta.glob("../../results/*", { query: "?raw" })).map((p) => p.split("/").pop());
-    expect(all.filter((n) => n !== "README.md" && !n!.endsWith(".json"))).toEqual([]);
+  it("has only .json results, their .md transcripts and a README", () => {
+    const all = Object.keys(import.meta.glob("../../results/*", { query: "?raw" })).map((p) => p.split("/").pop()!);
+    const isTranscript = (n: string) => n.endsWith(".md") && all.includes(n.replace(/\.md$/, ".json"));
+    expect(all.filter((n) => n !== "README.md" && !n.endsWith(".json") && !isTranscript(n))).toEqual([]);
   });
 
   for (const [path, text] of Object.entries(files)) {

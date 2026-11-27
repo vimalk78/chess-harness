@@ -95,7 +95,7 @@ Context blocks are facts, not advice: no engine, no evaluation, no search, no op
 
 ### Submitting results
 
-When a game ends, **Submit result…** saves it to the project's [`results/`](results/) folder as a pull request: GitHub opens with the file filled in. The file has the PGN, how the game ended, each side's model, effort and harness (the full config for custom harnesses), and counts such as tokens, re-asks, referee rejections and random fallback moves. Your OpenRouter key, prompts and reasoning are not included. CI checks that every result is consistent (legal moves, an ending that matches the final position, known harnesses); results are still self-reported. See [results/README.md](results/README.md).
+When a game ends, **Submit result…** saves it to the project's [`results/`](results/) folder as a pull request. First Stockfish reviews the game in your browser: each side's accuracy, and every move's evaluation, best move and whether it was an inaccuracy, mistake or blunder. The file has the PGN, how the game ended, each side's model, effort and harness (the full config for custom harnesses), counts such as tokens, re-asks, referee rejections and random fallback moves, and a record of every move (time, tokens, cost, the reply and notes, the engine's verdict). Tick the box to add the full transcript, with every prompt and reasoning text. Your OpenRouter key is never included. A finished game can be submitted later too: *Download log (JSON)*, then *Load game…* and *Submit result…*. CI checks that every result is consistent (legal moves, an ending that matches the final position, known harnesses); results are still self-reported. See [results/README.md](results/README.md).
 
 ## Code-level agents
 

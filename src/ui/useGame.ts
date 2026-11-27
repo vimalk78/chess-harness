@@ -247,6 +247,7 @@ export function useGame(getKey: () => string) {
           result: null,
           reason: null,
           events: [],
+          arenaVersion: __ARENA_VERSION__,
         },
         false,
       );

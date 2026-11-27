@@ -10,6 +10,8 @@ import { Chess } from "chess.js";
 import { ENGINE_NAME, engineLevel } from "../agents/engine";
 import type { Color, ReasoningEffort } from "../agents/types";
 import { validateHarness, type HarnessConfig } from "../harness/config";
+import { moveRecords, type MoveRecord } from "./moveRecords";
+import type { GameReview, MoveReview, SideReview } from "./review";
 import type { SavedGame } from "./savedGame";
 
 export const RESULTS_DIR = "results";
@@ -80,7 +82,13 @@ export interface ResultFile {
   pgn: string;
   white: ResultSide;
   black: ResultSide;
+  /** Every half-move: cost, problems, the visible reply and notes, and (when reviewed) the engine's verdict. */
+  moves?: ResultMove[];
+  /** Stockfish's review of the game, per side (the per-move part is in `moves`). */
+  review?: { engine: string; depth: number; white: SideReview; black: SideReview };
 }
+
+export type ResultMove = MoveRecord & Partial<MoveReview>;
 
 export function terminationOf(reason: string): Termination | null {
   const r = reason.toLowerCase();
@@ -136,6 +144,8 @@ export interface BuildOptions {
   arenaVersion: string;
   submittedBy?: string;
   comment?: string;
+  /** Stockfish's review, computed before submitting (see game/review.ts). */
+  review?: GameReview;
   /** Harnesses on the site, to tell presets and community harnesses from custom ones. */
   presets: HarnessConfig[];
   community: HarnessConfig[];
@@ -185,7 +195,7 @@ export function buildResultFile(game: SavedGame, opts: BuildOptions): Built {
       version: 1,
       startedAt: new Date(game.startedAt).toISOString(),
       finishedAt: new Date(finishedAt).toISOString(),
-      arenaVersion: opts.arenaVersion,
+      arenaVersion: game.arenaVersion ?? opts.arenaVersion,
       ...(opts.submittedBy?.trim() ? { submittedBy: opts.submittedBy.trim().slice(0, 80) } : {}),
       ...(opts.comment?.trim() ? { comment: opts.comment.trim().slice(0, 1000) } : {}),
       result: game.result,
@@ -195,6 +205,8 @@ export function buildResultFile(game: SavedGame, opts: BuildOptions): Built {
       pgn: opts.pgn,
       white: side("w"),
       black: side("b"),
+      moves: moveRecords(game).map((m, i) => ({ ...m, ...opts.review?.moves[i] })),
+      ...(opts.review ? { review: { engine: opts.review.engine, depth: opts.review.depth, white: opts.review.white, black: opts.review.black } } : {}),
     },
   };
 }
@@ -214,6 +226,53 @@ const sideSlug = (s: ResultSide) =>
 export function resultFileName(file: ResultFile): string {
   const start = new Date(file.startedAt);
   return `${file.startedAt.slice(0, 10)}-${sideSlug(file.white)}-vs-${sideSlug(file.black)}-${start.getTime().toString(36)}.json`;
+}
+
+// ---- Commit message (GitHub's upload page can't be pre-filled, so the dialog offers it to copy) ----
+
+const shortModel = (id: string) => id.replace(/^[^/]*\//, "").replace(/:free$/, "");
+
+/** "Stockfish 1600", "Attacker + notes (ernie-5.5-flash-preview)", "Human". */
+function shortPlayer(side: ResultSide): string {
+  if (side.kind === "engine" && side.engine) return `Stockfish ${side.engine.elo ?? "full strength"}`;
+  if (side.kind === "llm") return `${side.harness?.name ?? "LLM"} (${shortModel(side.model ?? "?")})`;
+  return side.player;
+}
+
+function sideLine(label: string, side: ResultSide): string {
+  if (side.kind === "engine" && side.engine) return `${label}: ${side.engine.name}, ${side.engine.elo ? `Elo ${side.engine.elo}` : "full strength"}`;
+  if (side.kind !== "llm") return `${label}: ${side.player}`;
+  const s = side.stats;
+  const parts = [`${label}: ${side.harness?.name ?? "?"} (${side.harness?.source ?? "?"})`, side.model ?? "?"];
+  if (s) {
+    parts.push(`${s.requests} requests`, `${(s.promptTokens + s.completionTokens).toLocaleString("en")} tokens`);
+    if (s.costUsd !== undefined) parts.push(`$${s.costUsd.toFixed(2)}`);
+    const problems = [s.reasks && count(s.reasks, "re-ask"), s.refereeRejections && `${s.refereeRejections} rejected`, s.randomMoves && count(s.randomMoves, "random move")].filter(Boolean);
+    if (problems.length) parts.push(problems.join(", "));
+  }
+  return parts.join(" · ");
+}
+
+const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const moveName = (ply: number, san: string) => `${Math.ceil(ply / 2)}${ply % 2 ? "." : "..."}${san}`;
+
+/** A commit title and description that say what the game was. */
+export function resultCommitMessage(file: ResultFile): { title: string; description: string } {
+  const moves = Math.ceil(file.plies / 2);
+  const title = `Result: ${shortPlayer(file.white)} vs ${shortPlayer(file.black)}, ${file.result} (${file.termination}, ${moves} moves)`;
+  const lines = [sideLine("White", file.white), sideLine("Black", file.black)];
+  if (file.reason.toLowerCase() !== file.termination.replace(/-/g, " ")) lines.push(`Ended: ${file.reason}`);
+  if (file.review) {
+    const r = file.review;
+    const side = (k: "white" | "black") =>
+      `${k === "white" ? "White" : "Black"} ${r[k].accuracy}% accuracy, ${count(r[k].blunders, "blunder")}, ${count(r[k].mistakes, "mistake")}`;
+    lines.push("", `Review (${r.engine}, depth ${r.depth}): ${side("white")}; ${side("black")}`);
+    const bad = (file.moves ?? []).filter((m) => m.class === "blunder");
+    if (bad.length) lines.push(`Blunders: ${bad.map((m) => moveName(m.ply, m.san) + (m.best ? ` (best ${m.best})` : "")).join(", ")}`);
+  }
+  if (file.comment) lines.push("", file.comment);
+  if (file.submittedBy) lines.push("", `Submitted by ${file.submittedBy}`);
+  return { title, description: lines.join("\n") };
 }
 
 // ---- Validation (run by CI on every file in results/) ----
@@ -252,6 +311,36 @@ function checkSide(raw: unknown, name: string, library: HarnessConfig[]): string
     const n = raw.stats[k];
     if (k === "analysisRounds" && n === undefined) continue;
     if (!Number.isInteger(n) || (n as number) < 0) return `${name}.stats.${k} must be a whole number.`;
+  }
+  return null;
+}
+
+const isCount = (n: unknown) => Number.isInteger(n) && (n as number) >= 0;
+
+/** `moves`, when present, must follow the PGN move by move. */
+function checkMoves(raw: unknown, history: string[]): string | null {
+  if (raw === undefined) return null;
+  if (!Array.isArray(raw) || raw.length !== history.length) return `moves must have one entry per half-move (${history.length}).`;
+  for (let i = 0; i < raw.length; i++) {
+    const m = raw[i];
+    const at = `moves[${i}]`;
+    if (!isObj(m) || m.ply !== i + 1 || m.san !== history[i] || m.color !== (i % 2 === 0 ? "w" : "b")) return `${at} doesn't match half-move ${i + 1} (${history[i]}) of the PGN.`;
+    for (const k of ["requests", "promptTokens", "completionTokens", "reasoningChars", "reasks"]) if (!isCount(m[k])) return `${at}.${k} must be a whole number.`;
+    if (m.reply !== undefined && (typeof m.reply !== "string" || m.reply.length > 1000)) return `${at}.reply must be text of at most 1000 characters.`;
+    if (m.notes !== undefined && (typeof m.notes !== "string" || m.notes.length > 1000)) return `${at}.notes must be text of at most 1000 characters.`;
+    if (m.class !== undefined && !["inaccuracy", "mistake", "blunder"].includes(m.class as string)) return `${at}.class is not inaccuracy, mistake or blunder.`;
+  }
+  return null;
+}
+
+function checkReview(raw: unknown): string | null {
+  if (raw === undefined) return null;
+  if (!isObj(raw) || typeof raw.engine !== "string" || !isCount(raw.depth)) return "review needs an engine and a depth.";
+  for (const side of ["white", "black"]) {
+    const s = raw[side];
+    if (!isObj(s) || typeof s.accuracy !== "number" || !isCount(s.avgLoss) || !isCount(s.inaccuracies) || !isCount(s.mistakes) || !isCount(s.blunders)) {
+      return `review.${side} needs accuracy, avgLoss, inaccuracies, mistakes and blunders.`;
+    }
   }
   return null;
 }
@@ -322,5 +411,9 @@ export function validateResultFile(data: unknown, library: HarnessConfig[]): Che
     const problem = checkSide(data[key], name, library);
     if (problem) return { ok: false, error: problem };
   }
+  const movesProblem = checkMoves(data.moves, chess.history());
+  if (movesProblem) return { ok: false, error: movesProblem };
+  const reviewProblem = checkReview(data.review);
+  if (reviewProblem) return { ok: false, error: reviewProblem };
   return { ok: true, file: data as unknown as ResultFile, adjudicated: data.termination === "adjudicated" };
 }
