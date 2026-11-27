@@ -6,6 +6,9 @@ import type { Color, ReasoningEffort } from "../agents/types";
 import { isOftenRateLimited, type ModelInfo } from "../llm/models";
 import type { SideConfig as Side } from "./useGame";
 
+/** Dropdown entry that opens the editor on a new harness instead of selecting an agent. */
+const NEW_HARNESS = "__new_harness__";
+
 const OTHER = "__other__";
 
 interface Props {
@@ -52,7 +55,12 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
         {color === "w" ? "White" : "Black"}
       </legend>
       <label htmlFor={`${id}-agent`}>Agent</label>
-      <select id={`${id}-agent`} value={value.agentId} onChange={(e) => onChange({ ...value, agentId: e.target.value })}>
+      <div className="agent-row">
+      <select
+        id={`${id}-agent`}
+        value={value.agentId}
+        onChange={(e) => (e.target.value === NEW_HARNESS ? onHarness("new") : onChange({ ...value, agentId: e.target.value }))}
+      >
         <optgroup label="Presets">
           {PRESETS.map((p) => (
             <option key={p.id} value={p.id}>
@@ -69,15 +77,14 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
             ))}
           </optgroup>
         )}
-        {harnesses.length > 0 && (
-          <optgroup label="My harnesses">
-            {harnesses.map((h) => (
-              <option key={h.id} value={customAgentId(h.id)}>
-                {h.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
+        <optgroup label="My harnesses">
+          {harnesses.map((h) => (
+            <option key={h.id} value={customAgentId(h.id)}>
+              {h.name}
+            </option>
+          ))}
+          <option value={NEW_HARNESS}>+ New harness…</option>
+        </optgroup>
         <optgroup label="Other">
           {CODE_AGENTS.map((a) => (
             <option key={a.id} value={a.id}>
@@ -86,28 +93,30 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
           ))}
         </optgroup>
       </select>
+        <button type="button" onClick={() => onHarness("browse")} title="See every harness side by side, with what each one shows the model">
+          Browse…
+        </button>
+      </div>
       <p className="hint">
         {def.description}
         {author && ` By ${author}.`}
-      </p>
-      <div className="harness-actions">
-        <button type="button" onClick={() => onHarness("browse")}>
-          Browse harnesses…
-        </button>
         {isLibraryHarness(value.agentId) && (
-          <button type="button" onClick={() => onHarness("view")}>
-            View / duplicate
-          </button>
+          <>
+            {" "}
+            <button type="button" className="link" onClick={() => onHarness("view")}>
+              View / duplicate →
+            </button>
+          </>
         )}
         {value.agentId.startsWith("custom:") && (
-          <button type="button" onClick={() => onHarness("edit")}>
-            Edit harness
-          </button>
+          <>
+            {" "}
+            <button type="button" className="link" onClick={() => onHarness("edit")}>
+              Edit →
+            </button>
+          </>
         )}
-        <button type="button" onClick={() => onHarness("new")}>
-          + New harness
-        </button>
-      </div>
+      </p>
       {def.needsModel && (
         <>
           <label htmlFor={`${id}-model`}>Model {models && `(${choices.length} ${freeOnly ? "free" : "available"})`}</label>

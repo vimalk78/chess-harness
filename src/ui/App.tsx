@@ -589,6 +589,10 @@ export default function App() {
             setEditor({ color: picker, config, readOnly: isLibraryHarness(agentId), isNew: false });
           }}
           onClose={() => setPicker(null)}
+          onNew={() => {
+            setPicker(null);
+            openHarness(picker, "new");
+          }}
         />
       )}
 

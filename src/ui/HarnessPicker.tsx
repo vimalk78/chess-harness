@@ -15,9 +15,10 @@ interface Props {
   onPick: (agentId: string) => void;
   onView: (agentId: string) => void;
   onClose: () => void;
+  onNew: () => void;
 }
 
-export function HarnessPicker({ color, current, harnesses, onPick, onView, onClose }: Props) {
+export function HarnessPicker({ color, current, harnesses, onPick, onView, onClose, onNew }: Props) {
   const side = color === "w" ? "White" : "Black";
   const groups = useMemo(
     () =>
@@ -34,6 +35,9 @@ export function HarnessPicker({ color, current, harnesses, onPick, onView, onClo
       <div className="modal picker" role="dialog" aria-modal="true" aria-label={`Choose a harness for ${side}`}>
         <header className="editor-head">
           <h2>Choose a harness for {side}</h2>
+          <button type="button" onClick={onNew}>
+            + New harness
+          </button>
           <button type="button" className="close" onClick={onClose} aria-label="Close">
             ×
           </button>

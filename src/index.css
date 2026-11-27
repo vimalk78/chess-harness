@@ -214,8 +214,6 @@ footer .usage strong { color: var(--text); font-weight: 600; }
 .live-reasoning { color: var(--muted); max-height: 260px; overflow-y: auto; border-left: 2px solid var(--border); padding-left: 6px; margin-bottom: 6px !important; }
 
 /* Harness buttons on side cards */
-.harness-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px; }
-.harness-actions button { font-size: 0.8rem; padding: 4px 9px; }
 button.danger { color: var(--bad); border-color: var(--bad); }
 
 /* Banners */
@@ -298,3 +296,7 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); cur
 .builder-item label.check .hint { font-weight: 400; }
 .builder-item.on label.check { font-weight: 600; }
 .builder-heading { margin-left: 24px; font-size: 0.85rem; }
+.agent-row { display: flex; gap: 6px; align-items: stretch; }
+.agent-row select { flex: 1; min-width: 0; }
+.agent-row button { white-space: nowrap; }
+.hint button.link { font-size: inherit; }
