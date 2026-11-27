@@ -12,7 +12,6 @@ import { GameRunner, type GameEvent, type GameResult } from "../game/referee";
 import { clearCurrentGame, saveCurrentGame } from "../game/gameStore";
 import { isUnfinished, latestNotes, replay, type SavedGame, type SideConfig } from "../game/savedGame";
 import { OpenRouterClient } from "../llm/openrouter";
-import { countEvent } from "../analytics";
 
 export type { SideConfig } from "../game/savedGame";
 
@@ -191,8 +190,6 @@ export function useGame(getKey: () => string) {
       const white = make("w");
       const black = make("b");
 
-      const humans = (["w", "b"] as Color[]).filter((c) => !game.harnesses[c]).length;
-      const mode = humans ? "human vs LLM" : "LLM vs LLM";
       const onStream = (color: Color, d: StreamDelta) => {
         if (runnerRef.current !== runner) return;
         if (d.start || !liveBuf.current[color]) liveBuf.current[color] = { reasoning: "", text: "" };
@@ -214,7 +211,6 @@ export function useGame(getKey: () => string) {
           }
           if (event.type === "log" || event.type === "turnStart") clearLive(event.color);
           if (event.type === "paused" || event.type === "gameOver") clearLive();
-          if (event.type === "gameOver" && event.result !== "*") countEvent("game-finish", mode);
           // A stopped game stays saved as it was, so it can still be resumed.
           if (!(event.type === "gameOver" && event.result === "*")) save(event.type === "gameOver" || event.type === "paused");
           setState((s) => reduce(s, event));
@@ -231,7 +227,6 @@ export function useGame(getKey: () => string) {
       setState(restoreState(game, paused ? "paused" : "running"));
       save(true);
       void runner.start();
-      return mode;
     },
     [clearLive, flushLive, save],
   );
@@ -240,7 +235,7 @@ export function useGame(getKey: () => string) {
     (sides: Record<Color, SideConfig>) => {
       const harnesses = { w: harnessConfigFor(sides.w.agentId), b: harnessConfigFor(sides.b.agentId) };
       const now = Date.now();
-      const mode = launch(
+      launch(
         {
           version: 1,
           startedAt: now,
@@ -255,7 +250,6 @@ export function useGame(getKey: () => string) {
         },
         false,
       );
-      countEvent("game-start", mode);
     },
     [launch],
   );

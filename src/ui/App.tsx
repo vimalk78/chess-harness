@@ -8,7 +8,6 @@ import { DEFAULT_BUILDER, buildTurnPrompt } from "../harness/builder";
 import { HarnessEditor } from "./HarnessEditor";
 import { HarnessPicker } from "./HarnessPicker";
 import { useHarnesses } from "./useHarnesses";
-import { fetchPublicCount, GOATCOUNTER_CODE } from "../analytics";
 import type { Color } from "../agents/types";
 import { buildPgn } from "../game/pgn";
 import { clearCurrentGame, loadCurrentGame } from "../game/gameStore";
@@ -620,31 +619,8 @@ export default function App() {
 
       <footer>
         The referee only enforces the rules. No chess engine picks or suggests moves for any agent.
-        <UsageLine />
       </footer>
     </div>
-  );
-}
-
-/** "1,234 visits · 321 games played", if counting is on and the counts are public. */
-function UsageLine() {
-  const [counts, setCounts] = useState<{ visits: string | null; games: string | null } | null>(null);
-  useEffect(() => {
-    if (!GOATCOUNTER_CODE) return;
-    Promise.all([fetchPublicCount("TOTAL"), fetchPublicCount("game-start")]).then(([visits, games]) => setCounts({ visits, games }));
-  }, []);
-  if (!GOATCOUNTER_CODE) return null;
-  const parts = [counts?.visits && `${counts.visits} visits`, counts?.games && `${counts.games} games played`].filter(Boolean);
-  return (
-    <p className="usage">
-      {parts.length > 0 && <strong>{parts.join(" · ")}</strong>}
-      {parts.length > 0 && " · "}
-      Visits and games are counted anonymously with{" "}
-      <a href="https://www.goatcounter.com" target="_blank" rel="noreferrer">
-        GoatCounter
-      </a>{" "}
-      (no cookies; no keys, prompts or moves are sent).
-    </p>
   );
 }
 
