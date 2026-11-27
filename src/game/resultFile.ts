@@ -38,6 +38,8 @@ export interface SideStats {
   randomMoves: number;
   /** Replies with no text at all (often a model that ran out of tokens while thinking). */
   emptyReplies: number;
+  /** Analysis board rounds used (each one is an extra call). Absent in results from before the analysis board. */
+  analysisRounds?: number;
 }
 
 export interface ResultSide {
@@ -92,7 +94,7 @@ export function terminationOf(reason: string): Termination | null {
 
 /** Counts for one side from a saved game's events. */
 export function sideStats(game: SavedGame, color: Color): SideStats {
-  const s: SideStats = { requests: 0, promptTokens: 0, completionTokens: 0, reasks: 0, refereeRejections: 0, randomMoves: 0, emptyReplies: 0 };
+  const s: SideStats & { analysisRounds: number } = { requests: 0, promptTokens: 0, completionTokens: 0, reasks: 0, refereeRejections: 0, randomMoves: 0, emptyReplies: 0, analysisRounds: 0 };
   let cost = 0;
   let hasCost = false;
   let moves = 0;
@@ -114,10 +116,11 @@ export function sideStats(game: SavedGame, color: Color): SideStats {
         }
       }
       if (e.kind === "note" && /random legal move/.test(e.text)) s.randomMoves++;
+      if (e.kind === "analysis") s.analysisRounds++;
     }
   }
-  // Each move takes one call, plus one per referee rejection; anything beyond that was a pre-check re-ask.
-  s.reasks = Math.max(0, s.requests - moves - s.refereeRejections);
+  // Each move takes one call, plus one per referee rejection and one per analysis round; anything beyond that was a pre-check re-ask.
+  s.reasks = Math.max(0, s.requests - moves - s.refereeRejections - s.analysisRounds);
   if (hasCost) s.costUsd = Math.round(cost * 1e6) / 1e6;
   return s;
 }
@@ -231,8 +234,9 @@ function checkSide(raw: unknown, name: string, library: HarnessConfig[]): string
     return `${name}.harness "${h.id}" isn't in harnesses/; include its config.`;
   }
   if (!isObj(raw.stats)) return `${name}.stats is missing.`;
-  for (const k of ["requests", "promptTokens", "completionTokens", "reasks", "refereeRejections", "randomMoves", "emptyReplies"]) {
+  for (const k of ["requests", "promptTokens", "completionTokens", "reasks", "refereeRejections", "randomMoves", "emptyReplies", "analysisRounds"]) {
     const n = raw.stats[k];
+    if (k === "analysisRounds" && n === undefined) continue;
     if (!Number.isInteger(n) || (n as number) < 0) return `${name}.stats.${k} must be a whole number.`;
   }
   return null;

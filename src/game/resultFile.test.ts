@@ -51,7 +51,7 @@ function build(g = game(), extra: object = {}): ResultFile {
 describe("result files", () => {
   it("counts requests, tokens, re-asks, rejections, random moves and empty replies per side", () => {
     expect(sideStats(game(), "w")).toEqual({
-      requests: 4, promptTokens: 400, completionTokens: 200, costUsd: 0.004, reasks: 1, refereeRejections: 1, randomMoves: 1, emptyReplies: 1,
+      requests: 4, promptTokens: 400, completionTokens: 200, costUsd: 0.004, reasks: 1, refereeRejections: 1, randomMoves: 1, emptyReplies: 1, analysisRounds: 0,
     });
     expect(sideStats(game(), "b")).toMatchObject({ requests: 2, reasks: 0, refereeRejections: 0 });
   });

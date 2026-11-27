@@ -140,6 +140,7 @@ export function buildTranscript(g: SavedGame, pgn: string): string {
       return parts.join("\n");
     }
     if (e.kind === "notes") return ["**Notes kept for next move:**", "", fence(e.text)].join("\n");
+    if (e.kind === "analysis") return ["**Analysis board results sent back:**", "", fence(e.text)].join("\n");
     return `> ${e.text}`;
   };
 

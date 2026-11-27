@@ -23,15 +23,15 @@ export interface VariableContext {
   problem?: string;
 }
 
-const NAME: Record<PieceSymbol, string> = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+export const NAME: Record<PieceSymbol, string> = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
 const PLURAL: Record<PieceSymbol, string> = { p: "pawns", n: "knights", b: "bishops", r: "rooks", q: "queens", k: "kings" };
 const ORDER: PieceSymbol[] = ["k", "q", "r", "b", "n", "p"];
 const UNICODE: Record<string, string> = {
   wk: "♔", wq: "♕", wr: "♖", wb: "♗", wn: "♘", wp: "♙",
   bk: "♚", bq: "♛", br: "♜", bb: "♝", bn: "♞", bp: "♟",
 };
-const colorName = (c: Color) => (c === "w" ? "White" : "Black");
-const other = (c: Color): Color => (c === "w" ? "b" : "w");
+export const colorName = (c: Color) => (c === "w" ? "White" : "Black");
+export const other = (c: Color): Color => (c === "w" ? "b" : "w");
 
 /** Replays history so we have both the current position and the one before the last move. */
 function positions(history: string[]) {
@@ -43,11 +43,11 @@ function positions(history: string[]) {
   return { now, before, last };
 }
 
-function squaresLabel(chess: Chess, squares: Square[]): string {
+export function squaresLabel(chess: Chess, squares: Square[]): string {
   return squares.length ? squares.map((s) => `${NAME[chess.get(s)!.type]} ${s}`).join(", ") : "nothing";
 }
 
-function attackedLines(chess: Chess, owner: Color): string {
+export function attackedLines(chess: Chess, owner: Color): string {
   const lines: string[] = [];
   for (const row of chess.board()) {
     for (const cell of row) {
@@ -83,7 +83,7 @@ function pieceList(chess: Chess, color: Color): string {
   return `${colorName(color)}: ${parts.join(", ")}`;
 }
 
-function materialLine(chess: Chess, color: Color): string {
+export function materialLine(chess: Chess, color: Color): string {
   const counts = new Map<PieceSymbol, number>();
   for (const row of chess.board()) for (const c of row) if (c && c.color === color) counts.set(c.type, (counts.get(c.type) ?? 0) + 1);
   const parts = ORDER.filter((t) => t !== "k" && counts.get(t)).map((t) => `${counts.get(t)} ${counts.get(t) === 1 ? NAME[t] : PLURAL[t]}`);

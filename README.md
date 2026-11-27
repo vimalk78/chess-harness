@@ -31,7 +31,7 @@ A full game usually takes 80–200 requests, so on 50/day expect part of a game 
 
 ## Harnesses
 
-A **harness** decides what the model sees each turn and what happens to its answer. Three presets come built in, others are shared by the community, and you can build your own in the browser, with no code:
+A **harness** decides what the model sees each turn and what happens to its answer. Several presets come built in, others are shared by the community, and you can build your own in the browser, with no code:
 
 | Preset | What the model gets each turn | What happens with its reply |
 |---|---|---|
@@ -42,6 +42,7 @@ A **harness** decides what the model sees each turn and what happens to its answ
 | **Facts as lists (no board, no FEN)** | The position in words: every piece and its square, what the opponent's last move newly attacks, material, game state, moves that would leave a piece hanging (borderline: one move ahead), and legal moves grouped by piece. | Same as Harnessed. |
 | **Attacker (aggressive style)** | The same turn prompt as Harnessed + tactical facts, with a different system prompt: play for the initiative, forcing moves first (checks, captures, threats), attack the king, sacrifice only with a concrete follow-up, gambits welcome. | Same as Harnessed. |
 | **Attacker + notes** | Attacker, plus notes between moves focused on the attack plan (target, next 1–2 moves, threats to watch), so an attack can be carried over several moves. | Same as Harnessed. |
+| **Calculator (analysis board)** | Harnessed + tactical facts (plus material and game state), and an **analysis board**: before answering, the model can play out candidate lines (`ANALYZE: Nxe5 Nxe5 d4`) and gets the facts at the end of each, up to 4 rounds per move. The system prompt teaches engine-style thinking: forcing moves first, calculate the opponent's most dangerous replies, judge the ends of lines, blunder-check, then choose. | Same as Harnessed. Several calls per move. |
 
 **Human** is also available on either side: you drag pieces on the board.
 
@@ -60,6 +61,7 @@ Click **View / duplicate** on a preset (or **+ New harness**) to open the editor
 - **Re-ask prompt**: sent after a failed pre-check.
 - **Pre-check moves before submitting**: the harness checks the model's move with the rules and re-asks before the referee sees it, then either plays a random legal move or submits the last answer anyway.
 - **Keep notes between moves**: the model has no memory between moves, so the harness can give it one. It saves the `NOTES:` block at the end of each reply and passes it back next move as `{{my_notes}}`. Each side only ever sees its own notes, and notes survive saving and resuming. *Add notes instructions to the prompts* sets this up in one click.
+- **Analysis board** (off, or up to 1–8 rounds per move): the model can write `ANALYZE: <moves>` lines before answering. The harness plays each line (up to 6 lines per round, 10 moves per line) on a scratch board and replies with facts from the rules at the end of it: whether it's legal (and where it breaks), captures along the way, material, the side to move's captures and checks, what's attacked and undefended, checkmate or stalemate. No evaluation and no search of its own: the model chooses every line, how deep to go and what the result means. Each round is one more call.
 
 In text mode, prompts are templates. Write a `{{variable}}` wherever you want game information to appear; it's filled in fresh every turn:
 
@@ -74,6 +76,7 @@ Context blocks are facts, not advice: no engine, no evaluation, no search, no op
 ### Rules and transparency
 
 - **The referee** (chess.js) is the only judge of legality, the same for both sides. Moves can be SAN (`Nf3`) or UCI (`g1f3`). Three rejected moves in one turn forfeits the game. A game is a draw after 300 half-moves.
+- **No engine helps an agent.** Context blocks and the analysis board report facts from the rules only. The analysis board never looks ahead on its own: it plays exactly the lines the model writes, so any search is the model's. (Stockfish only plays as a declared opponent, and results record it as one.) Every analysis request and result is shown in the side panel and the transcript.
 - API errors (bad key, no credit, rate limits) pause the game instead of counting against the agent; Resume replays the turn.
 - Model output **streams live** into the side panels, reasoning included when OpenRouter returns it. Every prompt, reply, token count and cost is kept. The downloaded JSON log includes both sides' full harness configs.
 

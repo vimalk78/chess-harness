@@ -32,7 +32,8 @@ function SideSummary({ title, side }: { title: string; side: ResultSide }) {
         <div className="hint">
           {n(s.requests)} requests · {n(s.promptTokens)} prompt + {n(s.completionTokens)} reply tokens
           {s.costUsd !== undefined && ` · $${s.costUsd.toFixed(4)}`} · {s.reasks} re-asks · {s.refereeRejections} rejected · {s.randomMoves} random
-          moves{s.emptyReplies > 0 && ` · ${s.emptyReplies} empty replies`}
+          moves{!!s.analysisRounds && ` · ${s.analysisRounds} analysis rounds`}
+          {s.emptyReplies > 0 && ` · ${s.emptyReplies} empty replies`}
         </div>
       )}
     </div>

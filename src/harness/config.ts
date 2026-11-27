@@ -29,6 +29,11 @@ export interface HarnessConfig {
   /** Longest notes kept, in characters (100-4000). Default 800. */
   notesMaxChars?: number;
   /**
+   * Analysis board: rounds per move in which the model may write "ANALYZE: <line>" and get the
+   * facts at the end of each line (see analysis.ts). Off when absent. 1-8.
+   */
+  analysisRounds?: number;
+  /**
    * Set when the turn prompt was made with the editor's builder (a checklist of what the
    * model sees). turnPrompt always holds the generated text; this only lets the editor
    * show the checklist again. Dropped if the two disagree.
@@ -67,6 +72,9 @@ export function validateHarness(input: unknown): Validation {
   if (x.notesMaxChars !== undefined && (!Number.isInteger(x.notesMaxChars) || (x.notesMaxChars as number) < 100 || (x.notesMaxChars as number) > 4000)) {
     return { ok: false, error: '"notesMaxChars" must be a whole number from 100 to 4000.' };
   }
+  if (x.analysisRounds !== undefined && (!Number.isInteger(x.analysisRounds) || (x.analysisRounds as number) < 0 || (x.analysisRounds as number) > 8)) {
+    return { ok: false, error: '"analysisRounds" must be a whole number from 0 to 8.' };
+  }
   let builder: BuilderSpec | undefined;
   if (x.builder !== undefined) {
     const b = validateBuilder(x.builder);
@@ -87,6 +95,7 @@ export function validateHarness(input: unknown): Validation {
     fallback: x.fallback,
     ...(x.keepNotes ? { keepNotes: true } : {}),
     ...(x.keepNotes && x.notesMaxChars !== undefined ? { notesMaxChars: x.notesMaxChars as number } : {}),
+    ...(x.analysisRounds ? { analysisRounds: x.analysisRounds as number } : {}),
     ...(builder ? { builder } : {}),
   };
   return { ok: true, config };

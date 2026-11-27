@@ -147,6 +147,15 @@ function Entry({ entry }: { entry: PanelEntry }) {
           <pre>{entry.text}</pre>
         </div>
       );
+    case "analysis": {
+      const lines = (entry.text.match(/^Line \d+:/gm) ?? []).length;
+      return (
+        <details className="entry analysis">
+          <summary>Analysis board{lines ? `: ${lines} line${lines === 1 ? "" : "s"}` : ""}</summary>
+          <pre>{entry.text}</pre>
+        </details>
+      );
+    }
     case "illegal":
       return <div className="entry illegal">{entry.text}</div>;
     case "turn":

@@ -1,6 +1,7 @@
 // Starting points for the system prompt in the harness editor. Picking one replaces the
 // system prompt text, which stays fully editable afterwards: a style is not stored.
 
+import { ANALYSIS_SYSTEM_INSTRUCTIONS } from "./analysis";
 import { NOTES_SYSTEM_INSTRUCTIONS } from "./notes";
 import { ATTACKER_PRESET, HARNESSED_PRESET } from "./presets";
 
@@ -50,15 +51,15 @@ export const STYLES: Style[] = [
   },
 ];
 
-const withoutNotes = (text: string) => text.replace(NOTES_SYSTEM_INSTRUCTIONS, "").trim();
+const withoutAddOns = (text: string) => text.replace(NOTES_SYSTEM_INSTRUCTIONS, "").replace(ANALYSIS_SYSTEM_INSTRUCTIONS, "").trim();
 
-/** The style a system prompt matches (ignoring the notes instructions), or undefined if it's been edited. */
+/** The style a system prompt matches (ignoring the notes and analysis instructions), or undefined if it's been edited. */
 export function matchStyle(systemPrompt: string): Style | undefined {
-  const t = withoutNotes(systemPrompt);
+  const t = withoutAddOns(systemPrompt);
   return STYLES.find((s) => s.text.trim() === t);
 }
 
-/** The system prompt for a style, with the notes instructions added when the harness keeps notes. */
-export function styleText(style: Style, keepNotes: boolean): string {
-  return keepNotes ? `${style.text.trimEnd()}\n\n${NOTES_SYSTEM_INSTRUCTIONS}` : style.text;
+/** The system prompt for a style, plus the notes and analysis-board instructions when the harness uses them. */
+export function styleText(style: Style, keepNotes: boolean, analysis = false): string {
+  return [style.text.trimEnd(), analysis ? ANALYSIS_SYSTEM_INSTRUCTIONS : null, keepNotes ? NOTES_SYSTEM_INSTRUCTIONS : null].filter(Boolean).join("\n\n");
 }

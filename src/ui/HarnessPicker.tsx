@@ -95,6 +95,11 @@ function HarnessCard({ config, selected, side, onUse, onView }: { config: Harnes
           </span>
         ))}
         {s.usesNotes && <span className="chip notes">Notes between moves</span>}
+        {s.analysisRounds > 0 && (
+          <span className="chip tools" title="The model can play out lines on an analysis board before answering (extra calls per move)">
+            Analysis board · {s.analysisRounds} round{s.analysisRounds === 1 ? "" : "s"}
+          </span>
+        )}
         {!s.usesFen && s.blocks.length === 0 && <span className="chip muted">Moves only (PGN)</span>}
       </div>
       <p className="card-meta">

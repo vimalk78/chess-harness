@@ -13,6 +13,8 @@ export interface HarnessSummary {
   usesFen: boolean;
   usesNotes: boolean;
   usesSystemPrompt: boolean;
+  /** Analysis board rounds per move (0 = off). */
+  analysisRounds: number;
   /** e.g. "pre-check, 2 re-asks, then a random legal move" */
   checking: string;
   /** Approximate tokens of the first turn's prompt (system + user), at a typical middlegame position. */
@@ -41,6 +43,7 @@ export function summarizeHarness(config: HarnessConfig): HarnessSummary {
     usesFen: used.has("fen"),
     usesNotes: !!config.keepNotes && used.has("my_notes"),
     usesSystemPrompt: config.systemPrompt.trim() !== "",
+    analysisRounds: config.analysisRounds ?? 0,
     checking: config.precheck
       ? `pre-check, ${config.maxReasks} re-ask${config.maxReasks === 1 ? "" : "s"}, then ${config.fallback === "random" ? "a random legal move" : "the referee decides"}`
       : "no pre-check: the referee judges the raw answer",

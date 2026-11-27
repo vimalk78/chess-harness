@@ -35,7 +35,9 @@ export type LogEntry =
   | { kind: "response"; text: string; usage?: Usage; reasoning?: string }
   | { kind: "note"; text: string }
   /** Notes the agent keeps for its next move. The referee hands the latest back as GameView.myNotes. */
-  | { kind: "notes"; text: string };
+  | { kind: "notes"; text: string }
+  /** Analysis board results sent back to the model (each one is followed by another model call). */
+  | { kind: "analysis"; text: string };
 
 export interface AgentResult {
   /** SAN or UCI */

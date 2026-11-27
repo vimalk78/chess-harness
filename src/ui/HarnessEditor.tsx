@@ -11,6 +11,7 @@ import { templateVariables } from "../harness/template";
 import { buildTurnPrompt, builderFromTemplate, defaultItem, normalizeItems, type BuilderSpec } from "../harness/builder";
 import { STYLES, matchStyle, styleText } from "../harness/styles";
 import { HarnessBuilder } from "./HarnessBuilder";
+import { ANALYSIS_ROUND_CHOICES, ANALYSIS_SYSTEM_INSTRUCTIONS } from "../harness/analysis";
 
 type Field = "systemPrompt" | "turnPrompt" | "reaskPrompt";
 
@@ -27,6 +28,8 @@ interface Props {
   onSaved: (config: HarnessConfig) => void;
   onDeleted: (id: string) => void;
 }
+
+const addAnalysisText = (system: string) => `${system.trimEnd()}${system.trim() ? "\n\n" : ""}${ANALYSIS_SYSTEM_INSTRUCTIONS}`;
 
 const FIELD_LABEL: Record<Field, string> = {
   systemPrompt: "System prompt (optional)",
@@ -79,7 +82,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
       const items = on ? normalizeItems([...d.builder.items, defaultItem("my_notes")]) : d.builder.items.filter((i) => i.name !== "my_notes");
       const style = matchStyle(d.systemPrompt);
       const systemPrompt = style
-        ? styleText(style, on)
+        ? styleText(style, on, d.systemPrompt.includes(ANALYSIS_SYSTEM_INSTRUCTIONS))
         : on
           ? /notes\s*:/i.test(d.systemPrompt)
             ? d.systemPrompt
@@ -92,8 +95,18 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
     const style = STYLES.find((s) => s.id === id);
     if (!style) return;
     if (draft.systemPrompt.trim() && !currentStyle && !confirm(`Replace your system prompt with the "${style.label}" style?`)) return;
-    set("systemPrompt", styleText(style, !!draft.keepNotes));
+    set("systemPrompt", styleText(style, !!draft.keepNotes, draft.systemPrompt.includes(ANALYSIS_SYSTEM_INSTRUCTIONS)));
   };
+
+  // Analysis board: turning it on adds the ANALYZE instructions to the system prompt; turning it off removes them.
+  const asksForAnalysis = /analy[sz]e\s*:/i.test(draft.systemPrompt + draft.turnPrompt);
+  const setAnalysis = (rounds: number) =>
+    setDraft((d) => {
+      const { analysisRounds: _a, ...rest } = d;
+      if (!rounds) return { ...rest, systemPrompt: d.systemPrompt.replace(`\n\n${ANALYSIS_SYSTEM_INSTRUCTIONS}`, "").replace(ANALYSIS_SYSTEM_INSTRUCTIONS, "").trimEnd() };
+      const has = /analy[sz]e\s*:/i.test(d.systemPrompt + d.turnPrompt);
+      return { ...rest, analysisRounds: rounds, systemPrompt: has ? d.systemPrompt : addAnalysisText(d.systemPrompt) };
+    });
 
   // Notes only work if the prompts ask for a NOTES block and pass {{my_notes}} back.
   const asksForNotes = /notes\s*:/i.test(draft.systemPrompt + draft.turnPrompt);
@@ -329,6 +342,32 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
                 </div>
               )}
               {draft.keepNotes && notesProblem && <p className="hint warn">{notesProblem}</p>}
+              <div className="row">
+                <label htmlFor="h-analysis">Analysis board</label>
+                <select id="h-analysis" value={draft.analysisRounds ?? 0} onChange={(e) => setAnalysis(Number(e.target.value))}>
+                  <option value={0}>off</option>
+                  {ANALYSIS_ROUND_CHOICES.map((n) => (
+                    <option key={n} value={n}>
+                      up to {n} round{n === 1 ? "" : "s"} per move
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="hint">
+                Before answering, the model can write "ANALYZE: Nxe5 Nxe5 d4" to play out lines; the harness replies with facts from the
+                rules at the end of each line (captures, material, what's attacked, checks, mate). No evaluation: the model picks the lines and
+                judges them. Each round is one more call.
+              </p>
+              {!!draft.analysisRounds && !asksForAnalysis && (
+                <p className="hint warn">
+                  No prompt explains ANALYZE lines, so the model won't know it can analyze.{" "}
+                  {!readOnly && (
+                    <button type="button" className="link" onClick={() => set("systemPrompt", addAnalysisText(draft.systemPrompt))}>
+                      Add the instructions
+                    </button>
+                  )}
+                </p>
+              )}
               {!readOnly && (!used.has("my_notes") || !asksForNotes) && (
                 <button type="button" onClick={builder ? () => toggleNotes(true) : addNotesInstructions}>
                   Add notes instructions to the prompts

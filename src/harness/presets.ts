@@ -42,9 +42,10 @@ export const NOTES_PRESET = preset("harnessed-notes");
 export const LISTS_PRESET = preset("facts-as-lists");
 export const ATTACKER_PRESET = preset("attacker");
 export const ATTACKER_NOTES_PRESET = preset("attacker-notes");
+export const CALCULATOR_PRESET = preset("calculator");
 
 /** Built-in presets, in menu order. */
-export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET, NOTES_PRESET, LISTS_PRESET, ATTACKER_PRESET, ATTACKER_NOTES_PRESET];
+export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET, NOTES_PRESET, LISTS_PRESET, ATTACKER_PRESET, ATTACKER_NOTES_PRESET, CALCULATOR_PRESET];
 
 /** Community harnesses, sorted by name. */
 export const COMMUNITY: HarnessConfig[] = load(

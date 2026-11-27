@@ -9,6 +9,7 @@ import type { Agent, AgentDefinition, AgentDeps, AgentResult, AgentSettings, Cha
 import type { HarnessConfig } from "./config";
 import { variableSources, type VariableContext } from "./contextBlocks";
 import { DEFAULT_NOTES_MAX_CHARS, extractNotes } from "./notes";
+import { formatAnalysis, hasFinalMove, NO_ROUNDS_LEFT, parseAnalyzeRequests } from "./analysis";
 import { renderTemplate } from "./template";
 
 type PromptGame = VariableContext["game"];
@@ -54,9 +55,7 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
   messages.push({ role: "user", content: user });
   const log: LogEntry[] = [{ kind: "prompt", text: system ? `[system]\n${system}\n\n[user]\n${user}` : user }];
 
-  const reasks = config.precheck ? config.maxReasks : 0;
-  let lastAnswer = "";
-  for (let attempt = 0; attempt <= reasks; attempt++) {
+  const call = async () => {
     game.onStream?.({ start: true });
     const res = await llm.chat({
       model: settings.model,
@@ -66,7 +65,38 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
       onDelta: (d) => game.onStream?.(d),
     });
     log.push({ kind: "response", text: res.text, usage: res.usage, reasoning: res.reasoning });
+    return res;
+  };
 
+  // Analysis board: while the reply asks to ANALYZE lines (and gives no final MOVE), play them
+  // out and send back the facts, up to the harness's rounds for this move. Asking again after
+  // the last round gets one reminder to answer.
+  let roundsLeft = config.analysisRounds ?? 0;
+  let reminded = false;
+  const callWithAnalysis = async () => {
+    let res = await call();
+    while (config.analysisRounds && !hasFinalMove(res.text)) {
+      const lines = parseAnalyzeRequests(res.text);
+      if (!lines.length || (roundsLeft === 0 && reminded)) break;
+      let reply: string;
+      if (roundsLeft > 0) {
+        roundsLeft--;
+        reply = formatAnalysis(game.fen, lines, game.myColor, roundsLeft);
+      } else {
+        reminded = true;
+        reply = NO_ROUNDS_LEFT;
+      }
+      messages.push({ role: "assistant", content: res.text }, { role: "user", content: reply });
+      log.push({ kind: "analysis", text: reply });
+      res = await call();
+    }
+    return res;
+  };
+
+  const reasks = config.precheck ? config.maxReasks : 0;
+  let lastAnswer = "";
+  let res = await callWithAnalysis();
+  for (let attempt = 0; attempt <= reasks; attempt++) {
     const candidate = extractMove(res.text);
     lastAnswer = candidate ?? res.text.trim().slice(0, 60);
     if (!config.precheck) return { move: lastAnswer, log };
@@ -81,6 +111,7 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
     const reask = renderReask(config, game, problem);
     messages.push({ role: "assistant", content: res.text }, { role: "user", content: reask });
     log.push({ kind: "prompt", text: reask });
+    res = await callWithAnalysis();
   }
 
   if (config.fallback === "random") {
