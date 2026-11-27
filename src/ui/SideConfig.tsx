@@ -17,7 +17,7 @@ interface Props {
   harnesses: HarnessConfig[];
   onChange: (v: Side) => void;
   /** Open the harness editor: view a preset, edit a saved harness, or start a new one. */
-  onHarness: (action: "view" | "edit" | "new") => void;
+  onHarness: (action: "view" | "edit" | "new" | "browse") => void;
 }
 
 export function SideConfig({ color, value, disabled, models, freeOnly, harnesses, onChange, onHarness }: Props) {
@@ -91,6 +91,9 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
         {author && ` By ${author}.`}
       </p>
       <div className="harness-actions">
+        <button type="button" onClick={() => onHarness("browse")}>
+          Browse harnesses…
+        </button>
         {isLibraryHarness(value.agentId) && (
           <button type="button" onClick={() => onHarness("view")}>
             View / duplicate

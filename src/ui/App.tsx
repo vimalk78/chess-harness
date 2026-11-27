@@ -1,10 +1,11 @@
 import { Chess } from "chess.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { agentExists, customAgentId, getAgent, harnessConfigFor } from "../agents/registry";
+import { agentExists, customAgentId, getAgent, harnessConfigFor, isLibraryHarness } from "../agents/registry";
 import type { HarnessConfig, Validation } from "../harness/config";
 import { HARNESSED_PRESET } from "../harness/presets";
 import { harnessStore, newHarnessId, readShareFromHash } from "../harness/store";
 import { HarnessEditor } from "./HarnessEditor";
+import { HarnessPicker } from "./HarnessPicker";
 import { useHarnesses } from "./useHarnesses";
 import { fetchPublicCount, GOATCOUNTER_CODE } from "../analytics";
 import type { Color } from "../agents/types";
@@ -137,7 +138,10 @@ export default function App() {
     clearShareHash();
   };
 
-  const openHarness = (color: Color, action: "view" | "edit" | "new") => {
+  const [picker, setPicker] = useState<Color | null>(null);
+
+  const openHarness = (color: Color, action: "view" | "edit" | "new" | "browse") => {
+    if (action === "browse") return setPicker(color);
     if (action === "new") {
       const config: HarnessConfig = { ...HARNESSED_PRESET, id: newHarnessId(), name: "My harness", description: "" };
       return setEditor({ color, config, readOnly: false, isNew: true });
@@ -559,6 +563,25 @@ export default function App() {
           now={now}
         />
       </main>
+
+      {picker && (
+        <HarnessPicker
+          color={picker}
+          current={sides[picker].agentId}
+          harnesses={harnesses}
+          onPick={(agentId) => {
+            setSides((s) => ({ ...s, [picker]: { ...s[picker], agentId } }));
+            setPicker(null);
+          }}
+          onView={(agentId) => {
+            const config = harnessConfigFor(agentId);
+            if (!config) return;
+            setPicker(null);
+            setEditor({ color: picker, config, readOnly: isLibraryHarness(agentId), isNew: false });
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
 
       {editor && (
         <HarnessEditor
