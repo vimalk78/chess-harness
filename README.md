@@ -55,11 +55,13 @@ Every harness that ships with the site is a JSON file in [`harnesses/`](harnesse
 
 Click **View / duplicate** on a preset (or **+ New harness**) to open the editor. You can change:
 
-- **System prompt** (optional), **turn prompt** (sent every turn) and **re-ask prompt** (sent after a failed pre-check).
+- **What the model sees each turn.** New harnesses open in the **builder**: tick what goes in the turn prompt (move list, FEN, a board, the piece list, legal moves, the tactical facts below) and edit each item's heading. The builder writes the turn prompt for you, in a fixed order. **Edit as text** switches to the full template for your own wording and order; **Use the builder** switches back, keeping the blocks your text uses.
+- **System prompt** (optional): start from a style (Careful, Attacker, Solid, Minimal) and edit the text freely, or write your own.
+- **Re-ask prompt**: sent after a failed pre-check.
 - **Pre-check moves before submitting**: the harness checks the model's move with the rules and re-asks before the referee sees it, then either plays a random legal move or submits the last answer anyway.
 - **Keep notes between moves**: the model has no memory between moves, so the harness can give it one. It saves the `NOTES:` block at the end of each reply and passes it back next move as `{{my_notes}}`. Each side only ever sees its own notes, and notes survive saving and resuming. *Add notes instructions to the prompts* sets this up in one click.
 
-Prompts are templates. Write a `{{variable}}` wherever you want game information to appear; it's filled in fresh every turn:
+In text mode, prompts are templates. Write a `{{variable}}` wherever you want game information to appear; it's filled in fresh every turn:
 
 | Game | Context blocks (computed from the rules before each call) |
 |---|---|

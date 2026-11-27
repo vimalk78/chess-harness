@@ -8,6 +8,9 @@ import { exportHarnessJson, harnessStore, parseHarnessJson, shareUrl } from "../
 import { prepareSubmission } from "../harness/submit";
 import { DEFAULT_NOTES_MAX_CHARS, NOTES_MAX_CHAR_CHOICES, NOTES_SYSTEM_INSTRUCTIONS, NOTES_TURN_LINE } from "../harness/notes";
 import { templateVariables } from "../harness/template";
+import { buildTurnPrompt, builderFromTemplate, defaultItem, normalizeItems, type BuilderSpec } from "../harness/builder";
+import { STYLES, matchStyle, styleText } from "../harness/styles";
+import { HarnessBuilder } from "./HarnessBuilder";
 
 type Field = "systemPrompt" | "turnPrompt" | "reaskPrompt";
 
@@ -53,6 +56,45 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
 
   const set = <K extends keyof HarnessConfig>(k: K, v: HarnessConfig[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
+  // Builder mode: the turn prompt is generated from a checklist (see harness/builder.ts).
+  const builder = draft.builder;
+  const setBuilder = (spec: BuilderSpec) => setDraft((d) => ({ ...d, builder: spec, turnPrompt: buildTurnPrompt(spec) }));
+  const toText = () =>
+    setDraft((d) => {
+      const { builder: _b, ...rest } = d;
+      return rest;
+    });
+  const toBuilder = () => {
+    const spec = builderFromTemplate(templateVariables(draft.turnPrompt));
+    if (draft.keepNotes && !spec.items.some((i) => i.name === "my_notes")) spec.items = normalizeItems([...spec.items, defaultItem("my_notes")]);
+    const changes = buildTurnPrompt(spec) !== draft.turnPrompt;
+    if (changes && !confirm("The builder keeps the blocks this turn prompt uses, but replaces its wording and order with standard headings (which you can edit). Continue?")) return;
+    setBuilder(spec);
+  };
+  const toggleNotes = (on: boolean) =>
+    setDraft((d) => {
+      const next: HarnessConfig = { ...d, keepNotes: on };
+      if (!d.builder) return next;
+      // In builder mode notes are all or nothing: the {{my_notes}} item and the instructions follow the checkbox.
+      const items = on ? normalizeItems([...d.builder.items, defaultItem("my_notes")]) : d.builder.items.filter((i) => i.name !== "my_notes");
+      const style = matchStyle(d.systemPrompt);
+      const systemPrompt = style
+        ? styleText(style, on)
+        : on
+          ? /notes\s*:/i.test(d.systemPrompt)
+            ? d.systemPrompt
+            : `${d.systemPrompt.trimEnd()}${d.systemPrompt.trim() ? "\n\n" : ""}${NOTES_SYSTEM_INSTRUCTIONS}`
+          : d.systemPrompt.replace(NOTES_SYSTEM_INSTRUCTIONS, "").trimEnd();
+      return { ...next, systemPrompt, builder: { items }, turnPrompt: buildTurnPrompt({ items }) };
+    });
+  const currentStyle = matchStyle(draft.systemPrompt);
+  const pickStyle = (id: string) => {
+    const style = STYLES.find((s) => s.id === id);
+    if (!style) return;
+    if (draft.systemPrompt.trim() && !currentStyle && !confirm(`Replace your system prompt with the "${style.label}" style?`)) return;
+    set("systemPrompt", styleText(style, !!draft.keepNotes));
+  };
+
   // Notes only work if the prompts ask for a NOTES block and pass {{my_notes}} back.
   const asksForNotes = /notes\s*:/i.test(draft.systemPrompt + draft.turnPrompt);
   const notesProblem = !draft.keepNotes
@@ -71,14 +113,16 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
     }));
   const flash = (kind: "ok" | "error", text: string) => setMessage({ kind, text });
 
+  // In builder mode the turn prompt isn't a text box, so variables go into the system prompt.
+  const target: Field = builder && lastField === "turnPrompt" ? "systemPrompt" : lastField;
   const insert = (name: string) => {
     if (readOnly) return;
-    const el = refs[lastField].current;
+    const el = refs[target].current;
     const token = `{{${name}}}`;
-    const value = draft[lastField];
+    const value = draft[target];
     const startPos = el?.selectionStart ?? value.length;
     const endPos = el?.selectionEnd ?? value.length;
-    set(lastField, value.slice(0, startPos) + token + value.slice(endPos));
+    set(target, value.slice(0, startPos) + token + value.slice(endPos));
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(startPos + token.length, startPos + token.length);
@@ -190,18 +234,47 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
 
             {(Object.keys(FIELD_LABEL) as Field[]).map((f) => (
               <div key={f} className="field">
-                <label htmlFor={`h-${f}`}>{FIELD_LABEL[f]}</label>
-                <textarea
-                  id={`h-${f}`}
-                  ref={refs[f]}
-                  value={draft[f]}
-                  readOnly={readOnly}
-                  spellCheck={false}
-                  rows={f === "turnPrompt" ? 10 : f === "systemPrompt" ? 7 : 3}
-                  className={lastField === f && !readOnly ? "focused" : ""}
-                  onFocus={() => setLastField(f)}
-                  onChange={(e) => set(f, e.target.value)}
-                />
+                <div className="field-head">
+                  <label htmlFor={`h-${f}`}>{f === "turnPrompt" && builder ? "What the model sees each turn" : FIELD_LABEL[f]}</label>
+                  {f === "systemPrompt" && (
+                    <select
+                      aria-label="Start from a style"
+                      value={currentStyle?.id ?? ""}
+                      disabled={readOnly}
+                      onChange={(e) => pickStyle(e.target.value)}
+                      title={currentStyle?.description ?? "Pick a style to start from; you can edit the text afterwards."}
+                    >
+                      <option value="" disabled>
+                        {draft.systemPrompt.trim() ? "Style: custom" : "Start from a style…"}
+                      </option>
+                      {STYLES.map((st) => (
+                        <option key={st.id} value={st.id} title={st.description}>
+                          Style: {st.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {f === "turnPrompt" && !readOnly && (
+                    <button type="button" className="link" onClick={builder ? toText : toBuilder}>
+                      {builder ? "Edit as text" : "Use the builder"}
+                    </button>
+                  )}
+                </div>
+                {f === "turnPrompt" && builder ? (
+                  <HarnessBuilder spec={builder} readOnly={readOnly} onChange={setBuilder} onToggleNotes={toggleNotes} />
+                ) : (
+                  <textarea
+                    id={`h-${f}`}
+                    ref={refs[f]}
+                    value={draft[f]}
+                    readOnly={readOnly}
+                    spellCheck={false}
+                    rows={f === "turnPrompt" ? 10 : f === "systemPrompt" ? 7 : 3}
+                    className={target === f && !readOnly ? "focused" : ""}
+                    onFocus={() => setLastField(f)}
+                    onChange={(e) => set(f, e.target.value)}
+                  />
+                )}
               </div>
             ))}
 
@@ -232,7 +305,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
                 </div>
               )}
               <label className="check">
-                <input type="checkbox" checked={!!draft.keepNotes} onChange={(e) => set("keepNotes", e.target.checked)} />
+                <input type="checkbox" checked={!!draft.keepNotes} onChange={(e) => toggleNotes(e.target.checked)} />
                 Keep notes between moves
               </label>
               <p className="hint">
@@ -257,7 +330,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
               )}
               {draft.keepNotes && notesProblem && <p className="hint warn">{notesProblem}</p>}
               {!readOnly && (!used.has("my_notes") || !asksForNotes) && (
-                <button type="button" onClick={addNotesInstructions}>
+                <button type="button" onClick={builder ? () => toggleNotes(true) : addNotesInstructions}>
                   Add notes instructions to the prompts
                 </button>
               )}
@@ -278,7 +351,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
             {tab === "vars" ? (
               <>
                 <p className="hint">
-                  {readOnly ? "Variables a harness can use." : `Click to insert into the ${FIELD_LABEL[lastField].split(" (")[0].toLowerCase()}.`}{" "}
+                  {readOnly ? "Variables a harness can use." : `Click to insert into the ${FIELD_LABEL[target].split(" (")[0].toLowerCase()}.`}{" "}
                   Context blocks are computed from the rules before each call; the model never calls them.{" "}
                   <span className="used-key">Highlighted</span> = used by this harness.
                 </p>

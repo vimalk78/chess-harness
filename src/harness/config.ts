@@ -2,6 +2,8 @@
 // harnesses (harnesses/ folder) and user harnesses share this format; the harness
 // runner (runner.ts) executes it. It is data only: prompts and a few settings.
 
+import { buildTurnPrompt, validateBuilder, type BuilderSpec } from "./builder";
+
 export interface HarnessConfig {
   version: 1;
   /** Library harnesses: the file name without .json. User harnesses: random id. */
@@ -26,6 +28,12 @@ export interface HarnessConfig {
   keepNotes?: boolean;
   /** Longest notes kept, in characters (100-4000). Default 800. */
   notesMaxChars?: number;
+  /**
+   * Set when the turn prompt was made with the editor's builder (a checklist of what the
+   * model sees). turnPrompt always holds the generated text; this only lets the editor
+   * show the checklist again. Dropped if the two disagree.
+   */
+  builder?: BuilderSpec;
 }
 
 export const MAX_PROMPT_CHARS = 20_000;
@@ -59,6 +67,12 @@ export function validateHarness(input: unknown): Validation {
   if (x.notesMaxChars !== undefined && (!Number.isInteger(x.notesMaxChars) || (x.notesMaxChars as number) < 100 || (x.notesMaxChars as number) > 4000)) {
     return { ok: false, error: '"notesMaxChars" must be a whole number from 100 to 4000.' };
   }
+  let builder: BuilderSpec | undefined;
+  if (x.builder !== undefined) {
+    const b = validateBuilder(x.builder);
+    if (!b.ok) return b;
+    if (buildTurnPrompt(b.spec) === x.turnPrompt) builder = b.spec;
+  }
   const config: HarnessConfig = {
     version: 1,
     id: x.id as string,
@@ -73,6 +87,7 @@ export function validateHarness(input: unknown): Validation {
     fallback: x.fallback,
     ...(x.keepNotes ? { keepNotes: true } : {}),
     ...(x.keepNotes && x.notesMaxChars !== undefined ? { notesMaxChars: x.notesMaxChars as number } : {}),
+    ...(builder ? { builder } : {}),
   };
   return { ok: true, config };
 }

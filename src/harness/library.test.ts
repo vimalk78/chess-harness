@@ -12,7 +12,7 @@ const raw = {
   ...import.meta.glob<string>("../../harnesses/*", { eager: true, query: "?raw", import: "default" }),
   ...import.meta.glob<string>("../../harnesses/community/*", { eager: true, query: "?raw", import: "default" }),
 };
-const KNOWN_KEYS = new Set(["version", "id", "name", "description", "author", "systemPrompt", "turnPrompt", "reaskPrompt", "precheck", "maxReasks", "fallback", "keepNotes", "notesMaxChars"]);
+const KNOWN_KEYS = new Set(["version", "id", "name", "description", "author", "systemPrompt", "turnPrompt", "reaskPrompt", "precheck", "maxReasks", "fallback", "keepNotes", "notesMaxChars", "builder"]);
 
 const files = Object.entries(raw)
   .filter(([p]) => p.endsWith(".json"))

@@ -4,6 +4,7 @@ import { agentExists, customAgentId, getAgent, harnessConfigFor, isLibraryHarnes
 import type { HarnessConfig, Validation } from "../harness/config";
 import { HARNESSED_PRESET } from "../harness/presets";
 import { harnessStore, newHarnessId, readShareFromHash } from "../harness/store";
+import { DEFAULT_BUILDER, buildTurnPrompt } from "../harness/builder";
 import { HarnessEditor } from "./HarnessEditor";
 import { HarnessPicker } from "./HarnessPicker";
 import { useHarnesses } from "./useHarnesses";
@@ -143,7 +144,15 @@ export default function App() {
   const openHarness = (color: Color, action: "view" | "edit" | "new" | "browse") => {
     if (action === "browse") return setPicker(color);
     if (action === "new") {
-      const config: HarnessConfig = { ...HARNESSED_PRESET, id: newHarnessId(), name: "My harness", description: "" };
+      // New harnesses start in builder mode, showing what the Harnessed preset shows.
+      const config: HarnessConfig = {
+        ...HARNESSED_PRESET,
+        id: newHarnessId(),
+        name: "My harness",
+        description: "",
+        builder: DEFAULT_BUILDER,
+        turnPrompt: buildTurnPrompt(DEFAULT_BUILDER),
+      };
       return setEditor({ color, config, readOnly: false, isNew: true });
     }
     const config = harnessConfigFor(sides[color].agentId);

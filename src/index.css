@@ -286,3 +286,15 @@ pre.preview { max-height: none; }
 .chip.muted { color: var(--muted); }
 .card-meta { margin: 0; font-size: 0.74rem; color: var(--muted); }
 .card-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: auto; padding-top: 4px; }
+
+/* Harness builder (editor checklist) */
+.field-head { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.field-head select { font-size: 0.85rem; }
+button.link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 0.85rem; text-decoration: underline; }
+.builder { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.builder-group { display: flex; flex-direction: column; gap: 2px; }
+.builder-item { display: flex; flex-direction: column; gap: 3px; padding: 2px 0; }
+.builder-item label.check { font-weight: 500; flex-wrap: wrap; }
+.builder-item label.check .hint { font-weight: 400; }
+.builder-item.on label.check { font-weight: 600; }
+.builder-heading { margin-left: 24px; font-size: 0.85rem; }
