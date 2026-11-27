@@ -1,0 +1,54 @@
+{
+  "format": "chess-agent-arena-result",
+  "version": 1,
+  "startedAt": "2026-11-27T11:22:50.705Z",
+  "finishedAt": "2026-11-27T13:13:36.208Z",
+  "arenaVersion": "ae7e282",
+  "submittedBy": "vimalk78",
+  "comment": "spent 7 dollars on this stupid game",
+  "result": "1-0",
+  "termination": "checkmate",
+  "reason": "checkmate",
+  "plies": 103,
+  "pgn": "[Event \"Chess Agent Arena\"]\n[Site \"?\"]\n[Date \"2026.11.27\"]\n[Round \"?\"]\n[White \"Attacker + notes · google/gemini-4-hydrogen\"]\n[Black \"Attacker + notes · moonshotai/kimi-k3.1-pro\"]\n[Result \"1-0\"]\n[Termination \"checkmate\"]\n\n1. e4 c5 2. d4 cxd4 3. c3 dxc3 4. Nxc3 Nc6 5. Bc4 e6 6. Nf3 Nf6 7. O-O d6 8. Qe2 Be7 9. Rd1 O-O 10. e5 Ng4 11. exd6 Bxd6 12. Ne4 Bc7 13. Bg5 Qe8 14. h3 Nge5 15. Nxe5 Nxe5 16. Bb5 Bd7 17. Bxd7 Nxd7 18. Rac1 Bb6 19. Nd6 Qb8 20. Be7 Bd8 21. Bxf8 Nxf8 22. Rc8 Qxc8 23. Nxc8 Rxc8 24. Qb5 Bb6 25. Qd3 Ng6 26. Qd7 Rc7 27. Qd3 Rc8 28. Qd7 Rc7 29. Qd6 Rc6 30. Qb8+ Nf8 31. Qxb7 Rc7 32. Qf3 Rc2 33. Rb1 Bxf2+ 34. Qxf2 Rxf2 35. Kxf2 Nd7 36. Rd1 Kf8 37. Rxd7 Ke8 38. Rxa7 e5 39. Ke3 f6 40. Rxg7 Kf8 41. Rxh7 f5 42. Rh5 f4+ 43. Ke4 Kg7 44. Rxe5 Kf6 45. Rf5+ Kg6 46. Kxf4 Kh6 47. Rf6+ Kg7 48. Kg5 Kh7 49. Rf7+ Kh8 50. Kg6 Kg8 51. Rf1 Kh8 52. Rf8# 1-0",
+  "white": {
+    "player": "Attacker + notes · google/gemini-4-hydrogen",
+    "kind": "llm",
+    "model": "google/gemini-4-hydrogen",
+    "harness": {
+      "id": "attacker-notes",
+      "name": "Attacker + notes",
+      "source": "preset"
+    },
+    "stats": {
+      "requests": 52,
+      "promptTokens": 64732,
+      "completionTokens": 213727,
+      "reasks": 0,
+      "refereeRejections": 0,
+      "randomMoves": 0,
+      "emptyReplies": 0,
+      "costUsd": 1.700051
+    }
+  },
+  "black": {
+    "player": "Attacker + notes · moonshotai/kimi-k3.1-pro",
+    "kind": "llm",
+    "model": "moonshotai/kimi-k3.1-pro",
+    "harness": {
+      "id": "attacker-notes",
+      "name": "Attacker + notes",
+      "source": "preset"
+    },
+    "stats": {
+      "requests": 53,
+      "promptTokens": 62986,
+      "completionTokens": 552101,
+      "reasks": 2,
+      "refereeRejections": 0,
+      "randomMoves": 0,
+      "emptyReplies": 2,
+      "costUsd": 5.180282
+    }
+  }
+}
