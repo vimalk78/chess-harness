@@ -12,6 +12,8 @@ interface Props {
   /** While a rate-limit wait is on: when it began and when the retry happens. */
   waiting?: { since: number; until: number } | null;
   isHuman: boolean;
+  /** false for engines: no calls, tokens or cost to show. */
+  usesModel?: boolean;
   now: number;
 }
 
@@ -43,7 +45,7 @@ function LiveReasoning({ text }: { text: string }) {
   );
 }
 
-export function AgentLog({ color, title, entries, live, thinkingSince, waiting, isHuman, now }: Props) {
+export function AgentLog({ color, title, entries, live, thinkingSince, waiting, isHuman, usesModel = true, now }: Props) {
   const list = useStickToBottom<HTMLDivElement>(`${entries.length}:${live?.text.length ?? 0}:${live?.reasoning.length ?? 0}`);
 
   let prompt = 0;
@@ -73,7 +75,7 @@ export function AgentLog({ color, title, entries, live, thinkingSince, waiting, 
           {color === "w" ? "White" : "Black"}
         </h2>
         <div className="panel-title">{title}</div>
-        {!isHuman && (
+        {!isHuman && usesModel && (
           <div className="stats">
             <span>{calls} calls</span>
             <span>{(prompt + completion).toLocaleString()} tokens</span>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ENGINE_AGENTS } from "../agents/engine";
 import { CODE_AGENTS, communityAgentId, customAgentId, getAgent, harnessConfigFor, isLibraryHarness } from "../agents/registry";
 import type { HarnessConfig } from "../harness/config";
 import { COMMUNITY, PRESETS } from "../harness/presets";
@@ -84,6 +85,13 @@ export function SideConfig({ color, value, disabled, models, freeOnly, harnesses
             </option>
           ))}
           <option value={NEW_HARNESS}>+ New harness…</option>
+        </optgroup>
+        <optgroup label="Chess engine">
+          {ENGINE_AGENTS.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
         </optgroup>
         <optgroup label="Other">
           {CODE_AGENTS.map((a) => (

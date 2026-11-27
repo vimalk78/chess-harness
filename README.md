@@ -46,6 +46,12 @@ A **harness** decides what the model sees each turn and what happens to its answ
 
 **Human** is also available on either side: you drag pieces on the board.
 
+### Playing a chess engine
+
+**Stockfish** is available on either side, under *Chess engine*, at Elo 1320 (its weakest setting), 1600, 2000, 2400 or full strength. It's Stockfish 19 with the lite network, running in your browser as WebAssembly, 1 second per move. It makes no model calls, so a harness vs Stockfish game costs half as much as LLM vs LLM, and the opponent is the same strength every game. That makes it a yardstick for improving a harness: play it against the same level before and after a prompt change. Each engine move logs its search depth, evaluation (from White's side, so you can see where the other side went wrong) and main line. Engine vs engine games and Human vs engine also work.
+
+The Elo levels are Stockfish's own `UCI_Elo` setting. They're calibrated for longer time controls and the full network, so treat them as rough. Stockfish is GPL-3.0; the site serves the unmodified build from the [`stockfish`](https://www.npmjs.com/package/stockfish) package ([source](https://github.com/nmrugg/stockfish.js)), copied into `public/engine/` by `vite.config.ts`.
+
 ### The harnesses folder
 
 Every harness that ships with the site is a JSON file in [`harnesses/`](harnesses/), in the same format the editor exports: the three presets at the top level, and **community** submissions in [`harnesses/community/`](harnesses/community/), which appear in the agent menu under *Community*. A test checks every file (valid harness, id matches the file name, only known variables), and it runs on every pull request.
@@ -158,7 +164,8 @@ interface GameView {
 ```
 harnesses/    Built-in presets and community harnesses (JSON), bundled into the site
 results/      Submitted game results (JSON), checked by CI
-src/agents/   Agent interface, registry, Human agent, move parser
+src/agents/   Agent interface, registry, Human and Stockfish agents, move parser
+src/engine/   UCI driver for the Stockfish Web Worker
 src/harness/  Harness config format, loading harnesses/, runner, template variables, context blocks, saving/sharing, submissions
 src/game/     Referee (turn loop, legality, forfeits, pause, adjudication), PGN, saved games, transcripts, result files
 src/llm/      OpenRouter client

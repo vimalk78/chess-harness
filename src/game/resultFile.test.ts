@@ -73,6 +73,19 @@ describe("result files", () => {
     expect(validateResultFile(f, LIBRARY).ok).toBe(true);
   });
 
+  it("records engine sides with their strength, and validates them", () => {
+    const f = build(game({ sides: { ...game().sides, w: { agentId: "stockfish:1600", model: "", effort: "" } }, harnesses: { w: null, b: ATTACKER_PRESET }, labels: { w: "Stockfish 19 lite · Elo 1600", b: "x" } }));
+    expect(f.white).toEqual({ player: "Stockfish 19 lite · Elo 1600", kind: "engine", engine: { id: "stockfish:1600", name: "Stockfish 19 lite", elo: 1600 } });
+    expect(validateResultFile(f, LIBRARY).ok).toBe(true);
+    expect(resultFileName(f)).toMatch(/^2026-11-27-stockfish-1600-vs-attacker-big-2-free-/);
+    const full = build(game({ sides: { ...game().sides, b: { agentId: "stockfish:full", model: "", effort: "" } }, harnesses: { w: HARNESSED_PRESET, b: null } }));
+    expect(full.black.engine).toEqual({ id: "stockfish:full", name: "Stockfish 19 lite", elo: null });
+    expect(validateResultFile(full, LIBRARY).ok).toBe(true);
+    const bad = (engine: object) => validateResultFile({ ...f, white: { ...f.white, engine } }, LIBRARY);
+    expect(bad({ id: "stockfish:1234", name: "x", elo: 1234 })).toMatchObject({ ok: false, error: expect.stringMatching(/not a known engine level/) });
+    expect(bad({ id: "stockfish:1600", name: "x", elo: 2400 })).toMatchObject({ ok: false, error: expect.stringMatching(/doesn't match/) });
+  });
+
   it("records humans without a model or stats", () => {
     const f = build(game({ sides: { ...game().sides, w: { agentId: "human", model: "", effort: "" } }, harnesses: { w: null, b: ATTACKER_PRESET }, labels: { w: "Human", b: "x" } }));
     expect(f.white).toEqual({ player: "Human", kind: "human" });

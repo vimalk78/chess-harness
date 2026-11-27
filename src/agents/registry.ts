@@ -3,6 +3,7 @@
 //   - community harnesses from harnesses/community/, as "community:<id>"
 //   - the user's saved harnesses, as "custom:<id>"
 //   - code agents listed in CODE_AGENTS (Human, plus anything you add)
+//   - Stockfish at a few strengths (ENGINE_AGENTS), as "stockfish:<elo>" or "stockfish:full"
 // To add a code-level agent, write a file in this folder that exports an
 // AgentDefinition and add it to CODE_AGENTS.
 
@@ -10,6 +11,7 @@ import type { HarnessConfig } from "../harness/config";
 import { COMMUNITY, PRESETS } from "../harness/presets";
 import { harnessDefinition } from "../harness/runner";
 import { harnessStore } from "../harness/store";
+import { ENGINE_AGENTS } from "./engine";
 import { humanAgent } from "./human";
 import type { AgentDefinition } from "./types";
 
@@ -35,7 +37,7 @@ export function isLibraryHarness(agentId: string): boolean {
 export function getAgent(id: string): AgentDefinition {
   const config = harnessConfigFor(id);
   if (config) return harnessDefinition(config, id);
-  const def = CODE_AGENTS.find((a) => a.id === id);
+  const def = CODE_AGENTS.find((a) => a.id === id) ?? ENGINE_AGENTS.find((a) => a.id === id);
   if (!def) throw new Error(`Unknown agent: ${id}`);
   return def;
 }

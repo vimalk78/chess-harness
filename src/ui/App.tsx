@@ -72,6 +72,8 @@ function usesModel(agentId: string): boolean {
   }
 }
 
+const isHuman = (agentId: string) => agentId === "human";
+
 function loadSides(): Record<Color, Side> {
   try {
     const saved = JSON.parse(localStorage.getItem(SIDES_STORAGE) ?? "null");
@@ -284,8 +286,8 @@ export default function App() {
   const needsKey = llm.w || llm.b;
 
   const startProblem =
-    !llm.w && !llm.b
-      ? "Pick at least one LLM agent"
+    isHuman(sides.w.agentId) && isHuman(sides.b.agentId)
+      ? "Pick at least one agent that isn't Human"
       : needsKey && !key.trim()
         ? "Enter your OpenRouter key"
         : (llm.w && !sides.w.model.trim()) || (llm.b && !sides.b.model.trim())
@@ -297,7 +299,7 @@ export default function App() {
   const resumeProblem = gameNeedsKey && !key.trim() ? "Enter your OpenRouter key above to resume" : null;
 
   const label = (c: Color) => state.labels?.[c] ?? sideLabel(active[c]);
-  const humanColors = (["w", "b"] as Color[]).filter((c) => !usesModel(active[c].agentId));
+  const humanColors = (["w", "b"] as Color[]).filter((c) => isHuman(active[c].agentId));
   const orientation = humanColors.length === 1 && humanColors[0] === "b" ? "black" : "white";
 
   const pgn = () =>
@@ -473,7 +475,8 @@ export default function App() {
           live={live.w}
           thinkingSince={state.thinking?.color === "w" ? state.thinking.since : null}
           waiting={state.thinking?.color === "w" ? rateWait : null}
-          isHuman={!usesModel(active.w.agentId)}
+          isHuman={isHuman(active.w.agentId)}
+          usesModel={usesModel(active.w.agentId)}
           now={now}
         />
 
@@ -578,7 +581,8 @@ export default function App() {
           live={live.b}
           thinkingSince={state.thinking?.color === "b" ? state.thinking.since : null}
           waiting={state.thinking?.color === "b" ? rateWait : null}
-          isHuman={!usesModel(active.b.agentId)}
+          isHuman={isHuman(active.b.agentId)}
+          usesModel={usesModel(active.b.agentId)}
           now={now}
         />
       </main>

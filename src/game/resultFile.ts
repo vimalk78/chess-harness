@@ -7,6 +7,7 @@
 // that matches the final position, known harnesses), not that the game really happened.
 
 import { Chess } from "chess.js";
+import { ENGINE_NAME, engineLevel } from "../agents/engine";
 import type { Color, ReasoningEffort } from "../agents/types";
 import { validateHarness, type HarnessConfig } from "../harness/config";
 import type { SavedGame } from "./savedGame";
@@ -45,7 +46,9 @@ export interface SideStats {
 export interface ResultSide {
   /** The player's name as shown in the game, e.g. "Attacker + notes · some/model (high)". */
   player: string;
-  kind: "llm" | "human";
+  kind: "llm" | "human" | "engine";
+  /** For kind "engine": the agent id ("stockfish:1600"), its name and strength (null: full). */
+  engine?: { id: string; name: string; elo: number | null };
   model?: string;
   effort?: ReasoningEffort;
   harness?: {
@@ -148,7 +151,11 @@ export function buildResultFile(game: SavedGame, opts: BuildOptions): Built {
   const side = (c: Color): ResultSide => {
     const config = game.harnesses[c];
     const sideCfg = game.sides[c];
-    if (!config) return { player: game.labels[c], kind: "human" };
+    if (!config) {
+      const elo = engineLevel(sideCfg.agentId);
+      if (elo === undefined) return { player: game.labels[c], kind: "human" };
+      return { player: game.labels[c], kind: "engine", engine: { id: sideCfg.agentId, name: ENGINE_NAME, elo } };
+    }
     const agentId = sideCfg.agentId;
     const community = agentId.startsWith("community:") ? opts.community.find((h) => `community:${h.id}` === agentId) : undefined;
     const preset = opts.presets.find((h) => h.id === agentId);
@@ -200,7 +207,8 @@ const slug = (s: string, max: number) =>
     .slice(0, max)
     .replace(/-+$/, "") || "x";
 
-const sideSlug = (s: ResultSide) => (s.kind === "human" ? "human" : slug(`${s.harness?.id ?? "harness"}-${(s.model ?? "").split("/").pop()}`, 40));
+const sideSlug = (s: ResultSide) =>
+  s.kind === "human" ? "human" : s.kind === "engine" ? slug(s.engine?.id ?? "engine", 40) : slug(`${s.harness?.id ?? "harness"}-${(s.model ?? "").split("/").pop()}`, 40);
 
 /** e.g. "2026-11-27-attacker-gpt-5-vs-harnessed-llama-3-mgx2k1.json" (the last part comes from the start time). */
 export function resultFileName(file: ResultFile): string {
@@ -219,7 +227,13 @@ function checkSide(raw: unknown, name: string, library: HarnessConfig[]): string
   if (!isObj(raw)) return `${name} is missing.`;
   if (typeof raw.player !== "string" || !raw.player) return `${name}.player is missing.`;
   if (raw.kind === "human") return null;
-  if (raw.kind !== "llm") return `${name}.kind must be "llm" or "human".`;
+  if (raw.kind === "engine") {
+    const e = raw.engine;
+    if (!isObj(e) || typeof e.id !== "string" || engineLevel(e.id) === undefined) return `${name}.engine.id is not a known engine level.`;
+    if (e.elo !== engineLevel(e.id)) return `${name}.engine.elo doesn't match ${e.id}.`;
+    return null;
+  }
+  if (raw.kind !== "llm") return `${name}.kind must be "llm", "human" or "engine".`;
   if (typeof raw.model !== "string" || !raw.model.trim()) return `${name}.model is missing.`;
   if (raw.effort !== undefined && !["low", "medium", "high"].includes(raw.effort as string)) return `${name}.effort is not low, medium or high.`;
   const h = raw.harness;

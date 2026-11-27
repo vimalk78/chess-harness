@@ -28,6 +28,11 @@ function SideSummary({ title, side }: { title: string; side: ResultSide }) {
           {side.harness.source === "custom" ? ": full config included" : ""})
         </div>
       )}
+      {side.engine && (
+        <div className="hint">
+          Engine: {side.engine.name}, {side.engine.elo ? `limited to Elo ${side.engine.elo}` : "full strength"}
+        </div>
+      )}
       {s && (
         <div className="hint">
           {n(s.requests)} requests · {n(s.promptTokens)} prompt + {n(s.completionTokens)} reply tokens
