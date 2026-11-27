@@ -84,6 +84,10 @@ Context blocks are facts, not advice: no engine, no evaluation, no search, no op
 - **Adjudicate.** The agents can't agree a draw, so a dead-drawn position would be played out to the 300 half-move limit. The *Adjudicate* menu ends the game as a draw or a win for either side; the PGN and log record it as adjudicated.
 - **Transcript.** *Download transcript (.md)* writes the game as readable Markdown: the players and their harnesses, the PGN, then every turn with the prompt sent, the reasoning, the reply, re-asks, referee rulings, time taken and tokens used.
 
+### Submitting results
+
+When a game ends, **Submit result…** saves it to the project's [`results/`](results/) folder as a pull request: GitHub opens with the file filled in. The file has the PGN, how the game ended, each side's model, effort and harness (the full config for custom harnesses), and counts such as tokens, re-asks, referee rejections and random fallback moves. Your OpenRouter key, prompts and reasoning are not included. CI checks that every result is consistent (legal moves, an ending that matches the final position, known harnesses); results are still self-reported. See [results/README.md](results/README.md).
+
 ## Code-level agents
 
 For anything a harness config can't express (several calls per move, voting, critique loops), write an agent in code: add a file to `src/agents/` that exports an `AgentDefinition`, then add it to `CODE_AGENTS` in `src/agents/registry.ts`.
@@ -150,9 +154,10 @@ interface GameView {
 
 ```
 harnesses/    Built-in presets and community harnesses (JSON), bundled into the site
+results/      Submitted game results (JSON), checked by CI
 src/agents/   Agent interface, registry, Human agent, move parser
 src/harness/  Harness config format, loading harnesses/, runner, template variables, context blocks, saving/sharing, submissions
-src/game/     Referee (turn loop, legality, forfeits, pause, adjudication), PGN, saved games, transcripts
+src/game/     Referee (turn loop, legality, forfeits, pause, adjudication), PGN, saved games, transcripts, result files
 src/llm/      OpenRouter client
 src/ui/       React components and the useGame hook
 ```

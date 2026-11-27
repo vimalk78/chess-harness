@@ -12,6 +12,17 @@ export const COMMUNITY_DIR = "harnesses/community";
 /** GitHub's new-file links stop working somewhere past ~8 KB; longer harnesses are uploaded as a file instead. */
 export const MAX_LINK_LENGTH = 8000;
 
+/**
+ * GitHub's "create a new file" page for dir/filename with the text filled in. Opening it
+ * forks the repo for the contributor and ends in a pull request. Text too long for a link
+ * gets the upload page instead (the caller downloads the file for the user to drop on it).
+ */
+export function githubNewFile(dir: string, filename: string, text: string): { url: string; byUpload: boolean } {
+  const link = `https://github.com/${REPO}/new/main/${dir}?filename=${encodeURIComponent(filename)}&value=${encodeURIComponent(text)}`;
+  if (link.length <= MAX_LINK_LENGTH) return { url: link, byUpload: false };
+  return { url: `https://github.com/${REPO}/upload/main/${dir}`, byUpload: true };
+}
+
 /** "My Harness: v2!" -> "my-harness-v2" */
 export function slugify(name: string): string {
   return (
@@ -43,9 +54,5 @@ export function prepareSubmission(config: HarnessConfig, library: HarnessConfig[
   }
   const json = JSON.stringify({ ...v.config, id }, null, 2) + "\n";
   const path = `${COMMUNITY_DIR}/${id}.json`;
-  const link =
-    `https://github.com/${REPO}/new/main/${COMMUNITY_DIR}` +
-    `?filename=${encodeURIComponent(`${id}.json`)}&value=${encodeURIComponent(json)}`;
-  if (link.length <= MAX_LINK_LENGTH) return { ok: true, id, path, json, url: link, byUpload: false };
-  return { ok: true, id, path, json, url: `https://github.com/${REPO}/upload/main/${COMMUNITY_DIR}`, byUpload: true };
+  return { ok: true, id, path, json, ...githubNewFile(COMMUNITY_DIR, `${id}.json`, json) };
 }

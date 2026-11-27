@@ -7,6 +7,7 @@ import { harnessStore, newHarnessId, readShareFromHash } from "../harness/store"
 import { DEFAULT_BUILDER, buildTurnPrompt } from "../harness/builder";
 import { HarnessEditor } from "./HarnessEditor";
 import { HarnessPicker } from "./HarnessPicker";
+import { SubmitResult } from "./SubmitResult";
 import { useHarnesses } from "./useHarnesses";
 import type { Color } from "../agents/types";
 import { buildPgn } from "../game/pgn";
@@ -139,6 +140,7 @@ export default function App() {
   };
 
   const [picker, setPicker] = useState<Color | null>(null);
+  const [submitGame, setSubmitGame] = useState<SavedGame | null>(null);
 
   const openHarness = (color: Color, action: "view" | "edit" | "new" | "browse") => {
     if (action === "browse") return setPicker(color);
@@ -556,6 +558,15 @@ export default function App() {
               <button onClick={downloadLog} title="The whole game as data; load it later with Load game… to continue">
                 Download log (JSON)
               </button>
+              {state.status === "over" && state.result && state.result !== "*" && (
+                <button
+                  className="primary"
+                  title="Save this game's result to the project on GitHub, as a pull request"
+                  onClick={() => setSubmitGame(exportGame())}
+                >
+                  Submit result…
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -594,6 +605,8 @@ export default function App() {
           }}
         />
       )}
+
+      {submitGame && <SubmitResult game={submitGame} pgn={pgn()} download={download} onClose={() => setSubmitGame(null)} />}
 
       {editor && (
         <HarnessEditor
