@@ -45,9 +45,10 @@ export const ATTACKER_NOTES_PRESET = preset("attacker-notes");
 export const CALCULATOR_PRESET = preset("calculator");
 export const PLANNER_NOTES_PRESET = preset("planner-notes");
 export const PLANNER_THREATS_PRESET = preset("planner-threats");
+export const PLANNER_SAFETY_PRESET = preset("planner-safety");
 
 /** Built-in presets, in menu order. */
-export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET, NOTES_PRESET, LISTS_PRESET, ATTACKER_PRESET, ATTACKER_NOTES_PRESET, PLANNER_NOTES_PRESET, PLANNER_THREATS_PRESET, CALCULATOR_PRESET];
+export const PRESETS: HarnessConfig[] = [RAW_PRESET, HARNESSED_PRESET, TACTICAL_PRESET, NOTES_PRESET, LISTS_PRESET, ATTACKER_PRESET, ATTACKER_NOTES_PRESET, PLANNER_NOTES_PRESET, PLANNER_THREATS_PRESET, PLANNER_SAFETY_PRESET, CALCULATOR_PRESET];
 
 /** Community harnesses, sorted by name. */
 export const COMMUNITY: HarnessConfig[] = load(
