@@ -12,6 +12,7 @@ import { buildTurnPrompt, builderFromTemplate, defaultItem, normalizeItems, type
 import { STYLES, matchStyle, styleText } from "../harness/styles";
 import { HarnessBuilder } from "./HarnessBuilder";
 import { ANALYSIS_ROUND_CHOICES, ANALYSIS_SYSTEM_INSTRUCTIONS } from "../harness/analysis";
+import { copyText } from "./clipboard";
 
 type Field = "systemPrompt" | "turnPrompt" | "reaskPrompt";
 
@@ -176,7 +177,7 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
     a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     a.download = name;
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5 * 60_000); // after any save dialog
   };
 
   const exportJson = () =>
@@ -212,7 +213,8 @@ export function HarnessEditor({ initial, readOnly, isNew, previewGame, onClose, 
   const copyLink = async () => {
     const v = validateHarness(draft);
     if (!v.ok) return flash("error", v.error);
-    await navigator.clipboard.writeText(shareUrl(v.config));
+    const url = shareUrl(v.config);
+    if (!(await copyText(url))) return void window.prompt("Copy the share link (Ctrl+C):", url);
     flash("ok", "Share link copied. Anyone who opens it can add this harness.");
   };
 

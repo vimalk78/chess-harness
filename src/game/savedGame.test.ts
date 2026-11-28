@@ -87,3 +87,10 @@ describe("gameFileName", () => {
     );
   });
 });
+
+describe("loading a result file by mistake", () => {
+  it("says what the file is and what to load instead", () => {
+    const r = parseSavedGame({ format: "chess-agent-arena-result", version: 1, pgn: "1. e4 *" }, () => null, () => "x");
+    expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/^this is a result file .*Download log/) });
+  });
+});

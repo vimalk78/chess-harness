@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { browserEngine, ENGINE_NAME } from "../agents/engine";
 import { buildResultFile, resultCommitMessage, resultFileName, RESULTS_DIR, type ResultFile, type ResultSide } from "../game/resultFile";
 import { evaluatePositions, REVIEW_DEPTH, reviewMoves, type GameReview } from "../game/review";
@@ -6,6 +6,7 @@ import type { SavedGame } from "../game/savedGame";
 import { buildTranscript } from "../game/transcript";
 import { COMMUNITY, PRESETS } from "../harness/presets";
 import { githubNewFile, REPO } from "../harness/submit";
+import { copyText } from "./clipboard";
 
 const NAME_KEY = "arena.submitterName";
 
@@ -110,20 +111,22 @@ function ReviewSummary({ file }: { file: ResultFile }) {
 
 /** One part of the commit message, with a button that copies it. */
 function CopyField({ label, text, rows }: { label: string; text: string; rows: number }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<boolean | null>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
   const copy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
+    const ok = await copyText(text);
+    setCopied(ok);
+    if (!ok) area.current?.select(); // so Ctrl+C works
   };
   return (
     <div className="copy-field">
       <div className="copy-head">
         <span>{label}</span>
         <button type="button" onClick={copy}>
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : copied === false ? "Press Ctrl+C" : "Copy"}
         </button>
       </div>
-      <textarea readOnly rows={rows} value={text} onFocus={(e) => e.currentTarget.select()} />
+      <textarea ref={area} readOnly rows={rows} value={text} onFocus={(e) => e.currentTarget.select()} />
     </div>
   );
 }
@@ -174,14 +177,15 @@ export function SubmitResult({ game, pgn, onClose, download }: Props) {
     const json = JSON.stringify(built.file, null, 2) + "\n";
     const gh = githubNewFile(RESULTS_DIR, fileName, json);
     if (gh.byUpload || withTranscript) {
+      // Copy while this page still has focus: opening GitHub takes it away.
+      const msg = resultCommitMessage(built.file);
+      setMessage(msg);
+      void copyText(msg.title);
       download(fileName, json, "application/json");
       if (withTranscript) download(fileName.replace(/\.json$/, ".md"), transcript, "text/markdown");
       window.open(`https://github.com/${REPO}/upload/main/${RESULTS_DIR}`, "_blank", "noopener");
-      const msg = resultCommitMessage(built.file);
-      setMessage(msg);
-      navigator.clipboard.writeText(msg.title).catch(() => undefined);
       setDone(
-        `Downloaded ${withTranscript ? `${fileName} and its transcript (.md)` : fileName}. On GitHub, drop ${withTranscript ? "both files" : "it"} on the upload page. Under "Commit changes", paste the title (already copied) and the description below, then "Propose changes" and "Create pull request". (Your browser may ask to allow downloading two files.)`,
+        `Downloaded ${withTranscript ? `${fileName} and its transcript (.md)` : fileName}. On GitHub, drop ${withTranscript ? "both files" : "it"} on the upload page. Under "Commit changes", paste the title (already copied) and the description below, then "Propose changes" and "Create pull request". (Your browser may ask to allow downloading two files. If it added " (1)" to the names because older copies exist, remove that before uploading: results need the exact names.)`,
       );
       return;
     }
@@ -250,6 +254,12 @@ export function SubmitResult({ game, pgn, onClose, download }: Props) {
                 notes; prompts and reasoning are only in the transcript.
               </p>
             </>
+          )}
+          {!window.isSecureContext && (
+            <p className="hint warn">
+              This page is open over plain http at a network address, so your browser may hold the downloads as "Unconfirmed" until you
+              click Keep in its download list, and copying may need Ctrl+C. Open it at localhost or on the live site to avoid that.
+            </p>
           )}
           {done && <p className="flash ok">{done}</p>}
           {message && (

@@ -78,6 +78,13 @@ export function parseSavedGame(
   labelFor: (side: SideConfig, harness: HarnessConfig | null) => string,
 ): ParsedGame {
   if (!isObj(data)) return { ok: false, error: "not a game log (expected a JSON object)" };
+  if (data.format === "chess-agent-arena-result") {
+    return {
+      ok: false,
+      error:
+        "this is a result file (the one for GitHub's results/ folder), not a game log. It's ready to upload as it is. To open the game, load the chess-agent-arena-….json from Download log (JSON), or a PGN",
+    };
+  }
   if (!Array.isArray(data.history) || !data.history.every((m) => typeof m === "string")) {
     return { ok: false, error: "no move list (history) found" };
   }

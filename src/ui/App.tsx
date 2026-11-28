@@ -22,6 +22,7 @@ import { SideConfig } from "./SideConfig";
 import { FREE_MODEL_PREFERENCES, withFreeModels } from "./sides";
 import { fetchFreeQuota, fetchModels, type FreeQuota, type ModelInfo } from "../llm/models";
 import { sideLabel, useGame, type SideConfig as Side } from "./useGame";
+import { copyText } from "./clipboard";
 
 const KEY_STORAGE = "arena.openrouterKey";
 const SIDES_STORAGE = "arena.sides";
@@ -40,7 +41,9 @@ function download(filename: string, text: string, type: string) {
   a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(a.href);
+  // Not right away: with "Ask where to save each file" on, the browser reads the file only
+  // after the save dialog closes.
+  setTimeout(() => URL.revokeObjectURL(a.href), 5 * 60_000);
 }
 
 /** Harness behind an agent id, or null (Human, or a harness that no longer exists). */
@@ -309,7 +312,7 @@ export default function App() {
     });
 
   const copyPgn = async () => {
-    await navigator.clipboard.writeText(pgn());
+    if (!(await copyText(pgn()))) return void window.prompt("Copy the PGN (Ctrl+C):", pgn());
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
