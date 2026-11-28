@@ -53,6 +53,15 @@ export function parseInfo(line: string): Partial<SearchResult> | null {
   return out;
 }
 
+/**
+ * True when the last info line is Stockfish's reprint of a deliberately weaker move (strength
+ * limit): it starts with the move played, the line before started with another move, and its
+ * score is the placeholder 0 for a move it didn't finish searching.
+ */
+export function isWeakerPick(last: Partial<SearchResult>, before: Partial<SearchResult> | undefined, bestmove: string): boolean {
+  return !!before?.pv?.length && last.pv?.[0] === bestmove && before.pv[0] !== bestmove && last.cp === 0;
+}
+
 export class UciEngine {
   private listeners: ((line: string) => void)[] = [];
   private queue: Promise<unknown> = Promise.resolve();
@@ -93,11 +102,14 @@ export class UciEngine {
       t.send(req.moves.length ? `position startpos moves ${req.moves.join(" ")}` : "position startpos");
 
       let info: Partial<SearchResult> = { pv: [] };
+      let before: Partial<SearchResult> | undefined;
       const done = this.waitFor(
         (l) => l.startsWith("bestmove"),
         (l) => {
           const parsed = parseInfo(l);
-          if (parsed) info = { ...parsed, ...(parsed.mate === undefined ? { mate: undefined } : { cp: undefined }) };
+          if (!parsed) return;
+          before = info;
+          info = { ...parsed, ...(parsed.mate === undefined ? { mate: undefined } : { cp: undefined }) };
         },
       );
       const stop = () => t.send("stop");
@@ -108,6 +120,9 @@ export class UciEngine {
       if (req.signal?.aborted) throw abortError();
       const bestmove = line.split(/\s+/)[1];
       if (!bestmove || bestmove === "(none)") throw new Error("The engine found no move.");
+      // At a limited strength Stockfish may play a weaker move than its best, and then prints one
+      // more line for that move with a placeholder score of 0. Keep the best line's evaluation.
+      if (isWeakerPick(info, before, bestmove)) info = before!;
       return { ...info, pv: info.pv ?? [], bestmove };
     };
     const p = this.queue.then(run, run);

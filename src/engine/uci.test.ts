@@ -40,6 +40,22 @@ describe("UCI driver", () => {
     expect(sent).toEqual(["uci", "ucinewgame", "setoption name UCI_LimitStrength value true", "setoption name UCI_Elo value 1600", "isready", "position startpos moves e2e4", "go movetime 500"]);
   });
 
+  it("keeps the best line's evaluation when a strength-limited engine plays a weaker move", async () => {
+    // Real Stockfish 19 lite output at UCI_Elo 1600 (Planner + threats game, before 21...b5).
+    const { engine } = fakeEngine([
+      "info depth 14 seldepth 24 multipv 1 score cp 562 wdl 1000 0 0 nodes 198524 time 552 pv e4f3 g2f3 b6b5",
+      "info depth 14 seldepth 22 multipv 1 score cp 0 wdl 9 982 9 nodes 394153 time 1000 pv e4a8 a4b6 d7b6",
+      "bestmove e4a8 ponder a4b6",
+    ]);
+    const res = await engine.search({ moves: [], movetimeMs: 1000 });
+    expect(res).toMatchObject({ bestmove: "e4a8", depth: 14, cp: 562, wdl: [1000, 0, 0], pv: ["e4f3", "g2f3", "b6b5"] });
+  });
+
+  it("keeps a real 0.00 for the move it plays", async () => {
+    const { engine } = fakeEngine(["info depth 9 multipv 1 score cp 0 wdl 20 960 20 pv e7e5 g1f3", "bestmove e7e5 ponder g1f3"]);
+    expect(await engine.search({ moves: ["e2e4"], movetimeMs: 100 })).toMatchObject({ cp: 0, pv: ["e7e5", "g1f3"] });
+  });
+
   it("stops the engine and rejects when the turn is aborted", async () => {
     const { engine, sent } = fakeEngine([]);
     const abort = new AbortController();
