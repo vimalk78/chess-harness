@@ -1,6 +1,6 @@
 # Results summary
 
-8 submitted games, grouped by player and opponent. CI rewrites this file from the results in this folder after each push to main (`npm run results -- --write`), so don't edit it by hand.
+9 submitted games, grouped by player and opponent. CI rewrites this file from the results in this folder after each push to main (`npm run results -- --write`), so don't edit it by hand.
 
 | Player | Opponent | Games | W-D-L | Moves | Accuracy | Avg loss (cp) | Blunders/game | Mistakes/game | Re-asks/game | Stopped | Back-and-forth/game | Longest quiet run | Cost/game |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -9,6 +9,7 @@
 | Planner + notes · particle-1 (free) | Stockfish 1320 | 1 | 1-0-0 | 46 | 93.0% | 39 | 3.0 | 0.0 | 0.0 | 0 | 0.0 | 5 | $0.00 |
 | Attacker + notes · particle-1 (free) | Stockfish 1320 | 1 | 1-0-0 | 22 | 91.9% | 46 | 1.0 | 1.0 | 0.0 | 0 | 0.0 | 2 | $0.00 |
 | Raw (no harness) · particle-1 (free) | Stockfish 1320 | 2 | 0-0-2 | 23 | 83.3% | 68 | 2.0 | 1.5 | 0.0 | 0 | 1.0 | 9 | $0.00 |
+| Planner + threats · particle-1 (free) | Stockfish 1600 | 1 | 0-0-1 | 67 | 90.5% | 45 | 2.0 | 1.0 | 8.0 | 1 | 12.0 | 10 | $0.00 |
 | Planner + notes · particle-1 (free) | Stockfish 1600 | 1 | 0-0-1 | 30 | 87.6% | 86 | 3.0 | 1.0 | 0.0 | 0 | 1.0 | 3 | $0.00 |
 | Attacker + notes · ernie-5.5-flash-preview (free) | Stockfish 1600 | 1 | 0-0-1 | 13 | 86.1% | 98 | 1.0 | 0.0 | 0.0 | 0 | 0.0 | 3 | $0.00 |
 | Calculator (analysis board) · particle-1 (free) | Stockfish full | 1 | 0-0-1 | 22 | 91.8% | 53 | 1.0 | 1.0 | 0.0 | 0 | 2.0 | 6 | $0.00 |
