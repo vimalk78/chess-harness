@@ -43,6 +43,8 @@ export interface SideStats {
   emptyReplies: number;
   /** Analysis board rounds used (each one is an extra call). Absent in results from before the analysis board. */
   analysisRounds?: number;
+  /** Replies the app stopped because the model was looping or far too long (their tokens aren't counted). */
+  stoppedReplies?: number;
 }
 
 export interface ResultSide {
@@ -117,6 +119,7 @@ export function sideStats(game: SavedGame, color: Color): SideStats {
       if (e.kind === "response") {
         s.requests++;
         if (!e.text.trim()) s.emptyReplies++;
+        if (e.stopped) s.stoppedReplies = (s.stoppedReplies ?? 0) + 1;
         if (e.usage) {
           s.promptTokens += e.usage.promptTokens;
           s.completionTokens += e.usage.completionTokens;
@@ -247,7 +250,7 @@ function sideLine(label: string, side: ResultSide): string {
   if (s) {
     parts.push(`${s.requests} requests`, `${(s.promptTokens + s.completionTokens).toLocaleString("en")} tokens`);
     if (s.costUsd !== undefined) parts.push(`$${s.costUsd.toFixed(2)}`);
-    const problems = [s.reasks && count(s.reasks, "re-ask"), s.refereeRejections && `${s.refereeRejections} rejected`, s.randomMoves && count(s.randomMoves, "random move")].filter(Boolean);
+    const problems = [s.reasks && count(s.reasks, "re-ask"), s.refereeRejections && `${s.refereeRejections} rejected`, s.randomMoves && count(s.randomMoves, "random move"), s.stoppedReplies && count(s.stoppedReplies, "stopped reply")].filter(Boolean);
     if (problems.length) parts.push(problems.join(", "));
   }
   return parts.join(" · ");
@@ -326,6 +329,7 @@ function checkMoves(raw: unknown, history: string[]): string | null {
     const at = `moves[${i}]`;
     if (!isObj(m) || m.ply !== i + 1 || m.san !== history[i] || m.color !== (i % 2 === 0 ? "w" : "b")) return `${at} doesn't match half-move ${i + 1} (${history[i]}) of the PGN.`;
     for (const k of ["requests", "promptTokens", "completionTokens", "reasoningChars", "reasks"]) if (!isCount(m[k])) return `${at}.${k} must be a whole number.`;
+    if (m.stopped !== undefined && !isCount(m.stopped)) return `${at}.stopped must be a whole number.`;
     if (m.reply !== undefined && (typeof m.reply !== "string" || m.reply.length > 1000)) return `${at}.reply must be text of at most 1000 characters.`;
     if (m.notes !== undefined && (typeof m.notes !== "string" || m.notes.length > 1000)) return `${at}.notes must be text of at most 1000 characters.`;
     if (m.class !== undefined && !["inaccuracy", "mistake", "blunder"].includes(m.class as string)) return `${at}.class is not inaccuracy, mistake or blunder.`;

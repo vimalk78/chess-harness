@@ -1,3 +1,4 @@
+import type { CutOff } from "../llm/loopGuard";
 export type Color = "w" | "b";
 
 export interface GameView {
@@ -32,7 +33,8 @@ export interface Usage {
 
 export type LogEntry =
   | { kind: "prompt"; text: string }
-  | { kind: "response"; text: string; usage?: Usage; reasoning?: string }
+  /** stopped: why the app cut the reply off (a loop, or far too long); see llm/loopGuard.ts. */
+  | { kind: "response"; text: string; usage?: Usage; reasoning?: string; stopped?: string }
   | { kind: "note"; text: string }
   /** Notes the agent keeps for its next move. The referee hands the latest back as GameView.myNotes. */
   | { kind: "notes"; text: string }
@@ -69,7 +71,15 @@ export interface LlmClient {
     signal: AbortSignal;
     /** Called with each streamed piece of reply or reasoning text. */
     onDelta?: (delta: { content?: string; reasoning?: string }) => void;
-  }): Promise<{ text: string; usage?: Usage; reasoning?: string }>;
+  }): Promise<ChatResult>;
+}
+
+export interface ChatResult {
+  text: string;
+  usage?: Usage;
+  reasoning?: string;
+  /** Set when the client stopped the reply early (it was looping, or far too long). */
+  cutOff?: CutOff;
 }
 
 export interface AgentDeps {

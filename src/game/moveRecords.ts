@@ -32,6 +32,8 @@ export interface MoveRecord {
   random?: true;
   /** Calls that came back empty. */
   emptyReplies?: number;
+  /** Calls the app stopped: the model was looping, or far too long (their tokens aren't counted). */
+  stopped?: number;
   /** The last reply's visible text (no reasoning), trimmed. */
   reply?: string;
   /** The notes kept after this move, trimmed. */
@@ -86,6 +88,7 @@ export function moveRecords(game: SavedGame): MoveRecord[] {
             if (!e.text.trim()) cur.emptyReplies = (cur.emptyReplies ?? 0) + 1;
             else reply = e.text;
             cur.reasoningChars += e.reasoning?.length ?? 0;
+            if (e.stopped) cur.stopped = (cur.stopped ?? 0) + 1;
             if (e.usage) {
               cur.promptTokens += e.usage.promptTokens;
               cur.completionTokens += e.usage.completionTokens;

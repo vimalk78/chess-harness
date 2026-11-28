@@ -215,3 +215,22 @@ describe("resultCommitMessage", () => {
     );
   });
 });
+
+describe("stopped replies in results", () => {
+  it("counts them per move and per side, and validates them", () => {
+    const g = game();
+    const events = g.events.map((e, i) =>
+      i === 2 && e.event.type === "log"
+        ? { ...e, event: { ...e.event, entries: [{ kind: "response" as const, text: "", stopped: "Stopped the reply: it was repeating itself." }, ...e.event.entries] } }
+        : e,
+    );
+    const f = build({ ...g, events });
+    expect(f.moves![1]).toMatchObject({ san: "e5", requests: 2, stopped: 1, reasks: 1 });
+    expect(f.moves![0].stopped).toBeUndefined();
+    expect(f.black.stats).toMatchObject({ stoppedReplies: 1 });
+    expect(f.white.stats?.stoppedReplies).toBeUndefined();
+    expect(validateResultFile(JSON.parse(JSON.stringify(f)), LIBRARY).ok).toBe(true);
+    const bad = { ...f, moves: f.moves!.map((m, i) => (i === 1 ? { ...m, stopped: -1 } : m)) };
+    expect(validateResultFile(bad, LIBRARY)).toMatchObject({ ok: false, error: "moves[1].stopped must be a whole number." });
+  });
+});

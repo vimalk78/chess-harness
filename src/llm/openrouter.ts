@@ -1,4 +1,5 @@
-import type { ChatMessage, LlmClient, ReasoningEffort, Usage } from "../agents/types";
+import type { ChatMessage, ChatResult, LlmClient, ReasoningEffort, Usage } from "../agents/types";
+import { LoopGuard } from "./loopGuard";
 import { abortableSleep, RateLimiter } from "./rateLimiter";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
@@ -61,7 +62,7 @@ export class OpenRouterClient implements LlmClient {
     reasoningEffort?: ReasoningEffort;
     signal: AbortSignal;
     onDelta?: (delta: { content?: string; reasoning?: string }) => void;
-  }): Promise<{ text: string; usage?: Usage; reasoning?: string }> {
+  }): Promise<ChatResult> {
     const key = this.getKey().trim();
     if (!key) throw new Error("No OpenRouter API key set");
 
@@ -225,7 +226,8 @@ async function readStream(
   res: Response,
   model: string,
   onDelta?: (delta: { content?: string; reasoning?: string }) => void,
-): Promise<{ text: string; usage?: Usage; reasoning?: string }> {
+): Promise<ChatResult> {
+  const guard = new LoopGuard();
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -255,10 +257,14 @@ async function readStream(
         if (delta?.reasoning) {
           reasoning += delta.reasoning;
           onDelta?.({ reasoning: delta.reasoning });
+          const cut = guard.push("reasoning", delta.reasoning);
+          if (cut) return { ...finish(), cutOff: cut }; // leaving closes the stream, which ends the request
         }
         if (delta?.content) {
           text += delta.content;
           onDelta?.({ content: delta.content });
+          const cut = guard.push("content", delta.content);
+          if (cut) return { ...finish(), cutOff: cut };
         }
         if (chunk.usage) {
           usage = {
@@ -274,8 +280,8 @@ async function readStream(
     reader.cancel().catch(() => {});
   }
 
-  function finish() {
-    const out: { text: string; usage?: Usage; reasoning?: string } = { text };
+  function finish(): ChatResult {
+    const out: ChatResult = { text };
     if (usage) out.usage = usage;
     if (reasoning) out.reasoning = reasoning;
     return out;

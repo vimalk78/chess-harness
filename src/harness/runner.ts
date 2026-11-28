@@ -11,6 +11,7 @@ import { variableSources, type VariableContext } from "./contextBlocks";
 import { DEFAULT_NOTES_MAX_CHARS, extractNotes } from "./notes";
 import { formatAnalysis, hasFinalMove, NO_ROUNDS_LEFT, parseAnalyzeRequests } from "./analysis";
 import { renderTemplate } from "./template";
+import { describeCutOff } from "../llm/loopGuard";
 
 type PromptGame = VariableContext["game"];
 
@@ -64,9 +65,14 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
       signal: game.signal,
       onDelta: (d) => game.onStream?.(d),
     });
-    log.push({ kind: "response", text: res.text, usage: res.usage, reasoning: res.reasoning });
+    const stopped = res.cutOff ? describeCutOff(res.cutOff) : undefined;
+    log.push({ kind: "response", text: res.text, usage: res.usage, reasoning: res.reasoning, ...(stopped ? { stopped } : {}) });
+    if (stopped) log.push({ kind: "note", text: `${stopped} Its tokens and cost aren't known: a stopped stream has no usage report.` });
     return res;
   };
+
+  /** What goes back into the conversation as the model's turn: a stopped reply is cut short, so the loop isn't fed back. */
+  const asSent = (res: Awaited<ReturnType<typeof call>>) => (res.cutOff ? `${res.text.slice(0, 1500)}\n[cut off]` : res.text);
 
   // Analysis board: while the reply asks to ANALYZE lines (and gives no final MOVE), play them
   // out and send back the facts, up to the harness's rounds for this move. Asking again after
@@ -86,7 +92,7 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
         reminded = true;
         reply = NO_ROUNDS_LEFT;
       }
-      messages.push({ role: "assistant", content: res.text }, { role: "user", content: reply });
+      messages.push({ role: "assistant", content: asSent(res) }, { role: "user", content: reply });
       log.push({ kind: "analysis", text: reply });
       res = await call();
     }
@@ -105,11 +111,13 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
     if (san) return { move: san, log };
     if (attempt === reasks) break;
 
-    const problem = candidate
-      ? `${candidate} is not legal in this position.`
-      : `I couldn't find a "MOVE: <san>" line in your reply.`;
+    const problem = res.cutOff
+      ? `${res.cutOff.reason === "loop" ? "Your reply was stopped because it kept repeating itself." : "Your reply was stopped because it ran far too long."} Don't analyze everything again: decide now and answer briefly.`
+      : candidate
+        ? `${candidate} is not legal in this position.`
+        : `I couldn't find a "MOVE: <san>" line in your reply.`;
     const reask = renderReask(config, game, problem);
-    messages.push({ role: "assistant", content: res.text }, { role: "user", content: reask });
+    messages.push({ role: "assistant", content: asSent(res) }, { role: "user", content: reask });
     log.push({ kind: "prompt", text: reask });
     res = await callWithAnalysis();
   }

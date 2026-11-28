@@ -66,3 +66,30 @@ describe("OpenRouter streaming", () => {
     expect(sent.stream).toBe(true);
   });
 });
+
+describe("OpenRouter streaming: loop guard", () => {
+  it("stops reading a reply that repeats itself and closes the stream", async () => {
+    let cancelled = false;
+    let sent = 0;
+    const enc = new TextEncoder();
+    const endless = new ReadableStream({
+      pull(ctrl) {
+        // A model stuck in a loop: never ends on its own.
+        ctrl.enqueue(enc.encode(chunk({ choices: [{ delta: { reasoning: sent++ ? "Q? " : "Is Qxb2 safe? " } }] })));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const res = await client(() => new Response(endless, { status: 200, headers: { "content-type": "text/event-stream" } })).chat({
+      model: "m",
+      messages: [],
+      signal: signal(),
+    });
+    expect(res.cutOff).toMatchObject({ reason: "loop" });
+    expect(res.text).toBe("");
+    expect(res.reasoning).toMatch(/^Is Qxb2 safe\? (Q\? )+/);
+    expect(cancelled).toBe(true);
+    expect(sent).toBeLessThan(1000);
+  });
+});

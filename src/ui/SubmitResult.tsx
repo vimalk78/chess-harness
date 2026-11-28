@@ -42,6 +42,7 @@ function SideSummary({ title, side }: { title: string; side: ResultSide }) {
           {s.costUsd !== undefined && ` · $${s.costUsd.toFixed(4)}`} · {s.reasks} re-asks · {s.refereeRejections} rejected · {s.randomMoves} random
           moves{!!s.analysisRounds && ` · ${s.analysisRounds} analysis rounds`}
           {s.emptyReplies > 0 && ` · ${s.emptyReplies} empty replies`}
+          {!!s.stoppedReplies && ` · ${s.stoppedReplies} stopped (looping or too long)`}
         </div>
       )}
     </div>

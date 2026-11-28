@@ -149,3 +149,28 @@ describe("harness runner", () => {
     expect(p).toEqual({ system: "Play as Black", user: "White played e4 / {{unknown}}" });
   });
 });
+
+describe("stopped replies (loop guard)", () => {
+  it("logs the stop, sends back only the start of the reply, and asks for a short answer", async () => {
+    const calls: ChatMessage[][] = [];
+    const looping = "Is Qxb2 safe? " + "Q? ".repeat(2000);
+    const llm: LlmClient = {
+      chat: async (req) => {
+        calls.push(req.messages.map((m) => ({ ...m })));
+        return calls.length === 1
+          ? { text: looping, cutOff: { reason: "loop", sample: "Q?" } }
+          : { text: "MOVE: Nf3", usage: { promptTokens: 10, completionTokens: 5 } };
+      },
+    };
+    const res = await run(HARNESSED_PRESET, llm, view([]));
+    expect(res.move).toBe("Nf3");
+    expect(res.log).toContainEqual(expect.objectContaining({ kind: "response", stopped: expect.stringMatching(/repeating itself/) }));
+    expect(res.log).toContainEqual(expect.objectContaining({ kind: "note", text: expect.stringMatching(/^Stopped the reply: it was repeating itself \("Q\?…"\)/) }));
+    const second = calls[1];
+    const sentBack = second[second.length - 2];
+    expect(sentBack.role).toBe("assistant");
+    expect(sentBack.content.length).toBeLessThan(1600);
+    expect(sentBack.content).toMatch(/\[cut off\]$/);
+    expect(second[second.length - 1].content).toMatch(/^Your reply was stopped because it kept repeating itself\. Don't analyze everything again: decide now and answer briefly\./);
+  });
+});
