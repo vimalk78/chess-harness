@@ -30,6 +30,33 @@ jobs:
         with:
           path: dist
 
+  # After the checks pass, rewrites results/SUMMARY.md from results/*.json and commits it
+  # if the table changed. A push made with GITHUB_TOKEN doesn't start another workflow run.
+  summary:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run results -- --write
+      - name: Commit the summary if it changed
+        run: |
+          git add results/SUMMARY.md
+          if git diff --cached --quiet; then echo "Summary unchanged."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Results summary: $(ls results/*.json | wc -l) games"
+          # Someone may have pushed meanwhile: rebase onto it and retry, then give up.
+          git push || (git pull --rebase origin main && git push)
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
