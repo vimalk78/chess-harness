@@ -57,7 +57,11 @@ function numbered(fen: string, sans: string[]): string {
     .join(" ");
 }
 
-/** "+0.35 (White is better)", "mate in 3 for Black", from the engine's score for the side to move. */
+/**
+ * The engine's score from White's side, with the usual advantage symbol: "+0.85 ± White is
+ * clearly better", "−0.20 = equal", "mate in 3 for Black". Cut-offs (in pawns) are the common
+ * ones for these symbols: under 0.3 =, under 0.7 ⩲/⩱, under 1.5 ±/∓, otherwise +−/−+.
+ */
 export function formatEval(res: Pick<SearchResult, "cp" | "mate">, toMove: Color): string {
   const flip = toMove === "w" ? 1 : -1;
   if (res.mate !== undefined) {
@@ -66,8 +70,24 @@ export function formatEval(res: Pick<SearchResult, "cp" | "mate">, toMove: Color
   }
   if (res.cp === undefined) return "no score";
   const white = (res.cp * flip) / 100;
-  const side = Math.abs(white) < 0.3 ? "about equal" : `${white > 0 ? "White" : "Black"} is better`;
-  return `${white >= 0 ? "+" : "−"}${Math.abs(white).toFixed(2)} (${side})`;
+  const a = Math.abs(white);
+  const who = white > 0 ? "White" : "Black";
+  const label =
+    a < 0.3
+      ? "= equal"
+      : a < 0.7
+        ? `${white > 0 ? "⩲" : "⩱"} ${who} is slightly better`
+        : a < 1.5
+          ? `${white > 0 ? "±" : "∓"} ${who} is clearly better`
+          : `${white > 0 ? "+−" : "−+"} ${who} is winning`;
+  return `${white >= 0 ? "+" : "−"}${a.toFixed(2)} ${label}`;
+}
+
+/** Stockfish's own chances, for White: "White wins 34% · draw 60% · Black wins 6%". */
+export function formatWdl(wdl: [number, number, number], toMove: Color): string {
+  const [win, draw, loss] = toMove === "w" ? wdl : [wdl[2], wdl[1], wdl[0]];
+  const pct = (n: number) => `${Math.round(n / 10)}%`;
+  return `White wins ${pct(win)} · draw ${pct(draw)} · Black wins ${pct(loss)}`;
 }
 
 export function engineDefinition(elo: number | null, getEngine: () => UciEngine = browserEngine): AgentDefinition {
@@ -83,7 +103,7 @@ export function engineDefinition(elo: number | null, getEngine: () => UciEngine 
         async nextMove(game: GameView) {
           const res = await getEngine().search({
             moves: sanToUci(game.history),
-            options: elo ? { UCI_LimitStrength: true, UCI_Elo: elo } : { UCI_LimitStrength: false },
+            options: { UCI_ShowWDL: true, ...(elo ? { UCI_LimitStrength: true, UCI_Elo: elo } : { UCI_LimitStrength: false }) },
             movetimeMs: ENGINE_MOVETIME_MS,
             newGame: game.history.length < 2,
             signal: game.signal,
@@ -93,6 +113,7 @@ export function engineDefinition(elo: number | null, getEngine: () => UciEngine 
           const played = uciToSan(game.fen, [res.bestmove])[0] ?? res.bestmove;
           const text = [
             `Engine: depth ${res.depth ?? "?"} · eval ${formatEval(res, toMove)}`,
+            res.wdl ? `Stockfish's chances: ${formatWdl(res.wdl, toMove)}` : null,
             line.length ? `Main line: ${numbered(game.fen, line)}` : null,
             line[0] && line[0] !== played ? `Plays ${played} instead (strength limit).` : null,
           ]

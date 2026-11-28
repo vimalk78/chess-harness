@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
-import { engineLevel, formatEval } from "../agents/engine";
+import { engineLevel, formatEval, formatWdl } from "../agents/engine";
 import { parseInfo, sanToUci, uciToSan, UciEngine, type UciTransport } from "./uci";
 
 /** A scripted engine: answers uci/isready and replies to "go" with the given lines. */
@@ -50,12 +50,22 @@ describe("UCI driver", () => {
     void p.catch(() => undefined);
   });
 
-  it("formats the score from White's side", () => {
-    expect(formatEval({ cp: 25 }, "w")).toBe("+0.25 (about equal)");
-    expect(formatEval({ cp: 80 }, "w")).toBe("+0.80 (White is better)");
-    expect(formatEval({ cp: 150 }, "b")).toBe("−1.50 (Black is better)");
+  it("formats the score from White's side, with the usual advantage symbols", () => {
+    expect(formatEval({ cp: 25 }, "w")).toBe("+0.25 = equal");
+    expect(formatEval({ cp: 25 }, "b")).toBe("−0.25 = equal");
+    expect(formatEval({ cp: 50 }, "w")).toBe("+0.50 ⩲ White is slightly better");
+    expect(formatEval({ cp: 80 }, "b")).toBe("−0.80 ∓ Black is clearly better");
+    expect(formatEval({ cp: -149 }, "b")).toBe("+1.49 ± White is clearly better");
+    expect(formatEval({ cp: 150 }, "b")).toBe("−1.50 −+ Black is winning");
+    expect(formatEval({ cp: 611 }, "w")).toBe("+6.11 +− White is winning");
     expect(formatEval({ mate: 2 }, "b")).toBe("mate in 2 for Black");
     expect(formatEval({ mate: -3 }, "w")).toBe("mate in 3 for Black");
+  });
+
+  it("reads and formats Stockfish's win/draw/loss chances from White's side", () => {
+    expect(parseInfo("info depth 12 seldepth 15 multipv 1 score cp 611 wdl 1000 0 0 nodes 2110 pv g3h4 f2d1")).toMatchObject({ cp: 611, wdl: [1000, 0, 0], pv: ["g3h4", "f2d1"] });
+    expect(formatWdl([340, 600, 60], "w")).toBe("White wins 34% · draw 60% · Black wins 6%");
+    expect(formatWdl([340, 600, 60], "b")).toBe("White wins 6% · draw 60% · Black wins 34%");
   });
 
   it("knows the engine levels by agent id", () => {

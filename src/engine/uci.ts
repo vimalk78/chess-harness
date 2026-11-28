@@ -17,6 +17,8 @@ export interface SearchResult {
   cp?: number;
   /** Mate in N moves from the side to move's point of view (negative: being mated). */
   mate?: number;
+  /** Stockfish's own win/draw/loss chances in per mille, for the side to move (needs UCI_ShowWDL). */
+  wdl?: [number, number, number];
   /** The engine's main line, in UCI. */
   pv: string[];
 }
@@ -44,6 +46,8 @@ export function parseInfo(line: string): Partial<SearchResult> | null {
   if (depth) out.depth = Number(depth[1]);
   const score = / score (cp|mate) (-?\d+)/.exec(line);
   if (score) out[score[1] === "cp" ? "cp" : "mate"] = Number(score[2]);
+  const wdl = / wdl (\d+) (\d+) (\d+)/.exec(line);
+  if (wdl) out.wdl = [Number(wdl[1]), Number(wdl[2]), Number(wdl[3])];
   const pv = / pv (.+)$/.exec(line);
   out.pv = pv ? pv[1].trim().split(/\s+/) : [];
   return out;
