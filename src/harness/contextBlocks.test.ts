@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
-import { ALL_VARIABLE_NAMES, CONTEXT_BLOCKS, variableSources, type VariableContext } from "./contextBlocks";
+import { ALL_VARIABLE_NAMES, CONTEXT_BLOCKS, opponentChecks, variableSources, type VariableContext } from "./contextBlocks";
 import { renderTemplate } from "./template";
 
 function ctx(history: string[], extra: Partial<VariableContext> = {}): VariableContext {
@@ -46,6 +46,15 @@ describe("context blocks", () => {
       "Black played d6 (pawn d7 to d6). Newly attacked: queen g4.",
     );
     expect(v("last_move_threats", ctx(["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6", "Qxf7#"]))).toMatch(/You are in check\.$/);
+  });
+
+  it("opponent_checks lists the opponent's checks as if it were their turn, mates first", () => {
+    // Planner + notes vs Stockfish 1600, before 30.Qxe5?? Rh3#: the mate was already threatened.
+    const fen = "5k1B/5p2/p7/2P1pq2/P6K/2Pr4/N3QP1P/R4R2 w - - 7 30";
+    expect(opponentChecks(fen)).toBe("Rh3# <- CHECKMATE, Qf6+, Qh7+, Qg5+, Qh5+, Qg4+, Qh3+, Qf4+, Qxf2+, Qe4+, Rd4+");
+    expect(opponentChecks(new Chess().fen())).toBe("none");
+    // In check now: listing the checker's other checks would be misleading.
+    expect(v("opponent_checks", ctx(["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6", "Qxf7#"]))).toMatch(/^none listed: you are in check/);
   });
 
   it("attacks shows both sides with defenders and flags undefended pieces", () => {
@@ -95,6 +104,6 @@ describe("context blocks", () => {
   it("every block has a description and a fairness tag; only move_safety is borderline", () => {
     for (const b of CONTEXT_BLOCKS) expect(b.description.length).toBeGreaterThan(10);
     expect(CONTEXT_BLOCKS.filter((b) => b.fairness === "borderline").map((b) => b.name)).toEqual(["move_safety"]);
-    expect(ALL_VARIABLE_NAMES.size).toBe(9 + 12); // 9 game variables (incl. my_notes) + 12 context blocks
+    expect(ALL_VARIABLE_NAMES.size).toBe(9 + 13); // 9 game variables (incl. my_notes) + 13 context blocks
   });
 });

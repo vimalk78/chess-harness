@@ -42,6 +42,7 @@ export const BUILDER_ITEMS: BuilderItemInfo[] = [
   { name: "attacks", group: "Facts from the rules", defaultHeading: "Attacked pieces (computed from the rules, not an engine; pins are ignored):", multiline: true },
   { name: "captures", group: "Facts from the rules", defaultHeading: "Your captures:", multiline: false },
   { name: "checks", group: "Facts from the rules", defaultHeading: "Your checking moves:", multiline: false },
+  { name: "opponent_checks", group: "Facts from the rules", defaultHeading: "Your opponent's checking moves if it were their turn now (# = checkmate):", multiline: false },
   { name: "move_safety", group: "Facts from the rules", defaultHeading: "Warning, from the rules (one move ahead):", multiline: false },
   { name: "legal_moves", group: "Your moves", defaultHeading: "Legal moves:", multiline: false },
   { name: "legal_moves_by_piece", group: "Your moves", defaultHeading: "Your legal moves, by piece:", multiline: true },

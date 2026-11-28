@@ -90,6 +90,27 @@ export function materialLine(chess: Chess, color: Color): string {
   return `${colorName(color)}: ${parts.length ? parts.join(", ") : "king only"}`;
 }
 
+/**
+ * The opponent's checking moves as if it were their turn (the same position with the side to
+ * move swapped), checkmates first. SAN already marks check (+) and mate (#).
+ */
+export function opponentChecks(fen: string): string {
+  if (new Chess(fen).inCheck()) return "none listed: you are in check now.";
+  const parts = fen.split(" ");
+  parts[1] = parts[1] === "w" ? "b" : "w";
+  parts[3] = "-"; // an en passant capture is only possible right after the pawn's double step
+  let swapped: Chess;
+  try {
+    swapped = new Chess(parts.join(" "));
+  } catch {
+    return "none";
+  }
+  const checks = swapped.moves().filter((m) => /[+#]$/.test(m));
+  if (!checks.length) return "none";
+  const mates = checks.filter((m) => m.endsWith("#"));
+  return [...mates.map((m) => `${m} <- CHECKMATE`), ...checks.filter((m) => !m.endsWith("#"))].join(", ");
+}
+
 const BASE: (VariableInfo & { value: (ctx: VariableContext) => string })[] = [
   { name: "side", label: "Your side", description: "White or Black.", fairness: "game", value: ({ game }) => colorName(game.myColor) },
   { name: "opponent", label: "Opponent side", description: "White or Black.", fairness: "game", value: ({ game }) => colorName(other(game.myColor)) },
@@ -255,6 +276,14 @@ const BLOCKS: (VariableInfo & { value: (ctx: VariableContext) => string })[] = [
       const checks = game.legalMoves.filter((m) => /[+#]$/.test(m));
       return checks.length ? checks.join(", ") : "none";
     },
+  },
+  {
+    name: "opponent_checks",
+    label: "Opponent's checks",
+    description:
+      'The checking moves your opponent would have if it were their turn now, in SAN, checkmates first and flagged ("Rh3# <- CHECKMATE, Qf6+"). Shows threats against your king. "none" if they have no checks.',
+    fairness: "rules",
+    value: ({ game }) => opponentChecks(game.fen),
   },
   {
     name: "material",
