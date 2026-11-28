@@ -174,3 +174,35 @@ describe("stopped replies (loop guard)", () => {
     expect(second[second.length - 1].content).toMatch(/^Your reply was stopped because it kept repeating itself\. Don't analyze everything again: decide now and answer briefly\./);
   });
 });
+
+describe("replies that hit the provider's length limit", () => {
+  const outOfRoom = (then: string): LlmClient => {
+    let n = 0;
+    return {
+      chat: async () => (n++ === 0 ? { text: "", reasoning: "Let's reconstruct the position…", hitTokenLimit: true } : { text: then }),
+    };
+  };
+
+  it("re-asks with the reason when the harness pre-checks", async () => {
+    const calls: ChatMessage[][] = [];
+    const inner = outOfRoom("MOVE: Nf3");
+    const llm: LlmClient = { chat: async (req) => (calls.push(req.messages.map((m) => ({ ...m }))), inner.chat(req)) };
+    const res = await run(HARNESSED_PRESET, llm, view([]));
+    expect(res.move).toBe("Nf3");
+    expect(res.log).toContainEqual({ kind: "note", text: "The reply ended at the provider's limit on reply length." });
+    expect(calls[1].at(-1)!.content).toMatch(/^Your reply hit the limit on reply length before you gave a move\. Don't analyze everything again/);
+  });
+
+  it("tells the referee why there is no move when the harness doesn't pre-check", async () => {
+    const res = await run(RAW_PRESET, outOfRoom("Nf3"), view([]));
+    expect(res.move).toBe("");
+    expect(res.noMoveReason).toMatch(/^your reply hit the limit on reply length before you gave a move; don't analyze everything again/);
+  });
+
+  it("gives no reason when the reply still had a move in it", async () => {
+    const llm: LlmClient = { chat: async () => ({ text: "Nf3", hitTokenLimit: true }) };
+    const res = await run(RAW_PRESET, llm, view([]));
+    expect(res).toMatchObject({ move: "Nf3" });
+    expect(res.noMoveReason).toBeUndefined();
+  });
+});

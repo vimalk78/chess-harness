@@ -68,6 +68,21 @@ describe("GameRunner", () => {
     expect(errors[1]).toMatch(/could not parse/);
   });
 
+  it("uses the agent's reason for an empty reply, and passes it back next try", async () => {
+    const calls: GameView[] = [];
+    const replies = [{ move: "", noMoveReason: "your reply hit the limit on reply length" }, { move: "e4" }, { move: "Bc4" }, { move: "Qh5" }, { move: "Qxf7#" }];
+    const white: Agent = {
+      async nextMove(game) {
+        calls.push(game);
+        return { ...replies[calls.length - 1], log: [] };
+      },
+    };
+    const { events, done } = run(white, scripted(["e5", "Nc6", "Nf6"]));
+    await done;
+    expect(events.find((e) => e.type === "illegalAttempt")).toMatchObject({ move: "", error: "your reply hit the limit on reply length" });
+    expect(calls[1].previousAttempts).toEqual([{ move: "", error: "your reply hit the limit on reply length" }]);
+  });
+
   it("forfeits after maxIllegalAttempts rejected moves in one turn", async () => {
     const { events, done } = run(scripted(["e4"]), scripted(["Ke3", "Qh1", "a1", "e5"]), {
       maxIllegalAttempts: 3,

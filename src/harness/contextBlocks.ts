@@ -132,7 +132,7 @@ const BASE: (VariableInfo & { value: (ctx: VariableContext) => string })[] = [
     description:
       'Moves the referee rejected earlier this turn, each on a new line: "Your move X was rejected: <reason>. Try again." Empty if none.',
     fairness: "game",
-    value: ({ game }) => game.previousAttempts.map((a) => `\nYour move ${a.move} was rejected: ${a.error}. Try again.`).join(""),
+    value: ({ game }) => game.previousAttempts.map((a) => `\nYour move ${a.move || "(empty)"} was rejected: ${a.error}. Try again.`).join(""),
   },
   {
     name: "problem",

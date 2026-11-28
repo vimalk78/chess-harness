@@ -56,6 +56,12 @@ describe("OpenRouter streaming", () => {
     );
   });
 
+  it("says when the provider ended the reply at its length limit", async () => {
+    const body = chunk({ choices: [{ delta: { reasoning: "Let's reconstruct the board…" } }] }) + chunk({ choices: [{ delta: {}, finish_reason: "length" }] }) + "data: [DONE]\n\n";
+    const res = await client(() => sse([body])).chat({ model: "m", messages: [], signal: signal() });
+    expect(res).toEqual({ text: "", reasoning: "Let's reconstruct the board…", hitTokenLimit: true });
+  });
+
   it("requests streaming", async () => {
     let sent: Record<string, unknown> = {};
     const c = new OpenRouterClient(() => "k", async (_u, init) => {

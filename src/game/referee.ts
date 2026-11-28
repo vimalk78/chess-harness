@@ -145,6 +145,7 @@ export class GameRunner {
         this.emit({ type: "turnStart", color });
 
         let move: string;
+        let noMoveReason: string | undefined;
         try {
           const res = await agent.nextMove({
             history: this.chess.history(),
@@ -163,6 +164,7 @@ export class GameRunner {
           const kept = res.log.filter((e) => e.kind === "notes").at(-1);
           if (kept) this.notes[color] = kept.text;
           move = res.move;
+          noMoveReason = res.noMoveReason;
         } catch (err) {
           if (this.stopped) return end("*", "stopped");
           if (abort.signal.aborted) continue; // user pause: replay the turn after resume
@@ -174,7 +176,8 @@ export class GameRunner {
           this.turnAbort = null;
         }
 
-        const verdict = this.tryMove(move);
+        const verdict: ReturnType<GameRunner["tryMove"]> =
+          !(move ?? "").trim() && noMoveReason ? { ok: false, error: noMoveReason } : this.tryMove(move);
         if (verdict.ok) {
           this.emit({ type: "move", color, san: verdict.san, fen: this.chess.fen(), history: this.chess.history() });
           break;

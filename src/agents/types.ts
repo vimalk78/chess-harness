@@ -45,6 +45,8 @@ export interface AgentResult {
   /** SAN or UCI */
   move: string;
   log: LogEntry[];
+  /** Why there is no move, when `move` is empty; the referee shows it instead of "empty response". */
+  noMoveReason?: string;
 }
 
 export interface Agent {
@@ -80,6 +82,8 @@ export interface ChatResult {
   reasoning?: string;
   /** Set when the client stopped the reply early (it was looping, or far too long). */
   cutOff?: CutOff;
+  /** Set when the provider ended the reply at its length limit (finish_reason "length"). */
+  hitTokenLimit?: boolean;
 }
 
 export interface AgentDeps {

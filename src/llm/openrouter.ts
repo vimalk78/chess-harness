@@ -13,7 +13,7 @@ const UPSTREAM_RETRY_DELAYS_S = [10, 20, 30, 45, 60, 60];
 type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
 interface OpenRouterResponse {
-  choices?: { message?: { content?: string | null; reasoning?: string | null } }[];
+  choices?: { message?: { content?: string | null; reasoning?: string | null }; finish_reason?: string | null }[];
   usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
   error?: { message?: string; metadata?: { provider_name?: string; raw?: unknown } };
 }
@@ -161,7 +161,9 @@ export class OpenRouterClient implements LlmClient {
             ...(u.cost !== undefined ? { costUsd: u.cost } : {}),
           }
         : undefined;
-      return reasoning ? { text, usage, reasoning } : { text, usage };
+      const out: ChatResult = reasoning ? { text, usage, reasoning } : { text, usage };
+      if (data.choices?.[0]?.finish_reason === "length") out.hitTokenLimit = true;
+      return out;
     }
   }
 
@@ -234,6 +236,7 @@ async function readStream(
   let text = "";
   let reasoning = "";
   let usage: Usage | undefined;
+  let finishReason: string | undefined;
   try {
     for (;;) {
       const { value, done } = await reader.read();
@@ -254,6 +257,7 @@ async function readStream(
         }
         if (chunk.error) throw new Error(`OpenRouter (${model}): ${describeError(chunk, "error during streaming")}`);
         const delta = chunk.choices?.[0]?.delta;
+        finishReason = chunk.choices?.[0]?.finish_reason ?? finishReason;
         if (delta?.reasoning) {
           reasoning += delta.reasoning;
           onDelta?.({ reasoning: delta.reasoning });
@@ -284,6 +288,7 @@ async function readStream(
     const out: ChatResult = { text };
     if (usage) out.usage = usage;
     if (reasoning) out.reasoning = reasoning;
+    if (finishReason === "length") out.hitTokenLimit = true;
     return out;
   }
 }

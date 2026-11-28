@@ -5,7 +5,7 @@
 
 import { legalSan } from "../agents/chessUtil";
 import { extractMove } from "../agents/parse";
-import type { Agent, AgentDefinition, AgentDeps, AgentResult, AgentSettings, ChatMessage, GameView, LogEntry } from "../agents/types";
+import type { Agent, AgentDefinition, AgentDeps, AgentResult, AgentSettings, ChatMessage, ChatResult, GameView, LogEntry } from "../agents/types";
 import type { HarnessConfig } from "./config";
 import { variableSources, type VariableContext } from "./contextBlocks";
 import { DEFAULT_NOTES_MAX_CHARS, extractNotes } from "./notes";
@@ -68,6 +68,7 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
     const stopped = res.cutOff ? describeCutOff(res.cutOff) : undefined;
     log.push({ kind: "response", text: res.text, usage: res.usage, reasoning: res.reasoning, ...(stopped ? { stopped } : {}) });
     if (stopped) log.push({ kind: "note", text: `${stopped} Its tokens and cost aren't known: a stopped stream has no usage report.` });
+    if (res.hitTokenLimit) log.push({ kind: "note", text: OUT_OF_ROOM_NOTE });
     return res;
   };
 
@@ -105,7 +106,7 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
   for (let attempt = 0; attempt <= reasks; attempt++) {
     const candidate = extractMove(res.text);
     lastAnswer = candidate ?? res.text.trim().slice(0, 60);
-    if (!config.precheck) return { move: lastAnswer, log };
+    if (!config.precheck) return withReason({ move: lastAnswer, log }, res);
 
     const san = candidate ? legalSan(game.fen, candidate) : null;
     if (san) return { move: san, log };
@@ -113,7 +114,9 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
 
     const problem = res.cutOff
       ? `${res.cutOff.reason === "loop" ? "Your reply was stopped because it kept repeating itself." : "Your reply was stopped because it ran far too long."} Don't analyze everything again: decide now and answer briefly.`
-      : candidate
+      : res.hitTokenLimit && !candidate
+        ? OUT_OF_ROOM
+        : candidate
         ? `${candidate} is not legal in this position.`
         : `I couldn't find a "MOVE: <san>" line in your reply.`;
     const reask = renderReask(config, game, problem);
@@ -128,7 +131,20 @@ async function playTurn(config: HarnessConfig, settings: AgentSettings, llm: Age
     return { move, log };
   }
   log.push({ kind: "note", text: `No legal move after ${reasks + 1} tries; submitting the last answer to the referee.` });
-  return { move: lastAnswer, log };
+  return withReason({ move: lastAnswer, log }, res);
+}
+
+/** What the model is told when its reply hit the provider's length limit before giving a move. */
+export const OUT_OF_ROOM =
+  "Your reply hit the limit on reply length before you gave a move. Don't analyze everything again: decide now and answer briefly.";
+const OUT_OF_ROOM_NOTE = "The reply ended at the provider's limit on reply length.";
+/** The same, as a referee rejection ("Your move (empty) was rejected: …. Try again."). */
+const OUT_OF_ROOM_REJECTION =
+  "your reply hit the limit on reply length before you gave a move; don't analyze everything again, decide now and answer briefly";
+
+/** An empty answer from a reply that ran out of room: tell the referee why, so the model hears it. */
+function withReason(result: AgentResult, res: ChatResult): AgentResult {
+  return !result.move && res.hitTokenLimit ? { ...result, noMoveReason: OUT_OF_ROOM_REJECTION } : result;
 }
 
 export function harnessDefinition(config: HarnessConfig, id: string): AgentDefinition {
