@@ -9,3 +9,5 @@ Each file has the PGN, how the game ended, and for each side (an LLM harness, a 
 Prompts and reasoning run to megabytes, so they're not in the JSON. A result can come with its transcript, `<same name>.md`: every prompt, reasoning text and reply.
 
 Results are **self-reported**. CI (`src/game/results.test.ts`) checks that each file is consistent: the PGN is legal, the claimed ending matches the final position (checkmate, stalemate, repetition, …), and the harnesses exist. It can't check that the game was really played by the models named. Games ended by the person watching are marked `"termination": "adjudicated"`.
+
+To compare results, run `npm run results`: a table per player (harness and model, or Stockfish level) and opponent, with wins, draws and losses, Stockfish's accuracy and average loss, blunders, re-asks, stopped replies, cost, and two signs of aimless play (pieces moving straight back to where they came from, and the longest run of moves without a pawn move or capture). `npm run results -- --engines` adds Stockfish's own rows.
