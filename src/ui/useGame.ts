@@ -232,7 +232,11 @@ export function useGame(getKey: () => string) {
   );
 
   const start = useCallback(
-    (sides: Record<Color, SideConfig>) => {
+    (chosen: Record<Color, SideConfig>) => {
+      // The setup panel remembers each side's model even while Stockfish or Human is picked;
+      // the saved game records only what was played.
+      const played = (c: SideConfig): SideConfig => (getAgent(c.agentId).needsModel ? c : { ...c, model: "", effort: "" });
+      const sides = { w: played(chosen.w), b: played(chosen.b) };
       const harnesses = { w: harnessConfigFor(sides.w.agentId), b: harnessConfigFor(sides.b.agentId) };
       const now = Date.now();
       launch(

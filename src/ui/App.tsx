@@ -12,7 +12,7 @@ import { useHarnesses } from "./useHarnesses";
 import type { Color } from "../agents/types";
 import { buildPgn } from "../game/pgn";
 import { clearCurrentGame, loadCurrentGame } from "../game/gameStore";
-import { historyFromPgn, isUnfinished, parseSavedGame, type SavedGame } from "../game/savedGame";
+import { gameFileName, historyFromPgn, isUnfinished, parseSavedGame, type SavedGame } from "../game/savedGame";
 import { buildTranscript } from "../game/transcript";
 import { AgentLog } from "./AgentLog";
 import { Board } from "./Board";
@@ -42,8 +42,6 @@ function download(filename: string, text: string, type: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
-
-const fileStamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
 /** Harness behind an agent id, or null (Human, or a harness that no longer exists). */
 function harnessOrNull(agentId: string): HarnessConfig | null {
@@ -318,12 +316,12 @@ export default function App() {
 
   const downloadLog = () => {
     const game = exportGame();
-    if (game) download(`chess-agent-arena-${fileStamp()}.json`, JSON.stringify({ pgn: pgn(), ...game }, null, 2), "application/json");
+    if (game) download(gameFileName(game, "json"), JSON.stringify({ pgn: pgn(), ...game }, null, 2), "application/json");
   };
 
   const downloadTranscript = () => {
     const game = exportGame();
-    if (game) download(`chess-agent-arena-${fileStamp()}.md`, buildTranscript(game, pgn()), "text/markdown");
+    if (game) download(gameFileName(game, "md"), buildTranscript(game, pgn()), "text/markdown");
   };
 
   const newGame = () => {
@@ -635,7 +633,7 @@ export default function App() {
       )}
 
       <footer>
-        The referee only enforces the rules. No chess engine picks or suggests moves for any agent.
+        The referee only enforces the rules. No chess engine helps an LLM agent: Stockfish only plays as an opponent you choose, and reviews games after they end.
       </footer>
     </div>
   );

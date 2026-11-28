@@ -2,7 +2,7 @@
 
 **Is it the model, or the harness?** Pit two chess **agents** against each other, or play one yourself, and see whether "model + harness" beats "model alone".
 
-An agent is a model plus a harness. Each turn the referee gives the agent the game so far and asks for a move. The harness is everything the agent does inside that turn. The referee only enforces the rules, and no chess engine picks or suggests moves.
+An agent is a model plus a harness. Each turn the referee gives the agent the game so far and asks for a move. The harness is everything the agent does inside that turn. The referee only enforces the rules, and no chess engine helps an LLM agent: Stockfish only plays as an opponent you choose, and reviews games after they end.
 
 **Try it:** https://vimalk78.github.io/chess-harness/
 

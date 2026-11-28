@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { HARNESSED_PRESET } from "../harness/presets";
-import { historyFromPgn, isUnfinished, parseSavedGame } from "./savedGame";
+import { HARNESSED_PRESET, PLANNER_NOTES_PRESET } from "../harness/presets";
+import { gameFileName, historyFromPgn, isUnfinished, parseSavedGame } from "./savedGame";
 
 const fallback = (id: string) => (id === "harnessed" ? HARNESSED_PRESET : null);
 const label = (s: { agentId: string; model: string }) => `${s.agentId} · ${s.model}`;
@@ -70,5 +70,20 @@ describe("historyFromPgn", () => {
 
   it("reports an unreadable PGN", () => {
     expect(historyFromPgn("1. e4 e4")).toMatchObject({ ok: false });
+  });
+});
+
+describe("gameFileName", () => {
+  it("names the file after the start time (local) and the players", () => {
+    const startedAt = new Date(2026, 10, 28, 13, 36, 29).getTime();
+    const g = {
+      startedAt,
+      sides: { w: { agentId: "planner-notes", model: "particle-ai/particle-1:free", effort: "" as const }, b: { agentId: "stockfish:1320", model: "x/y", effort: "" as const } },
+      harnesses: { w: PLANNER_NOTES_PRESET, b: null },
+    };
+    expect(gameFileName(g, "json")).toBe("chess-agent-arena-2026-11-28-1336-planner-notes-particle-1-vs-stockfish-1320.json");
+    expect(gameFileName({ ...g, sides: { ...g.sides, b: { agentId: "human", model: "", effort: "" as const } } }, "md")).toBe(
+      "chess-agent-arena-2026-11-28-1336-planner-notes-particle-1-vs-human.md",
+    );
   });
 });

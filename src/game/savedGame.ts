@@ -143,3 +143,32 @@ export function historyFromPgn(text: string): { ok: true; history: string[] } | 
   }
   return { ok: true, history: chess.history() };
 }
+
+const slugPart = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/, "");
+
+/** "planner-notes-particle-1", "stockfish-1320", "human". */
+function playerSlug(g: Pick<SavedGame, "sides" | "harnesses">, c: Color): string {
+  const { agentId, model } = g.sides[c];
+  const harness = g.harnesses[c];
+  if (!harness) return slugPart(agentId) || "player"; // Human, Stockfish
+  const shortModel = model.split("/").pop()!.replace(/:free$/, "");
+  return slugPart(`${harness.id}-${shortModel}`) || "player";
+}
+
+/**
+ * Download name for a game's log or transcript, from when it started (local time) and who
+ * played: "chess-agent-arena-2026-11-28-1336-planner-notes-particle-1-vs-stockfish-1320.json".
+ * Downloading the same game twice gives the same name.
+ */
+export function gameFileName(g: Pick<SavedGame, "startedAt" | "sides" | "harnesses">, ext: "json" | "md"): string {
+  const d = new Date(g.startedAt);
+  const p = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+  return `chess-agent-arena-${stamp}-${playerSlug(g, "w")}-vs-${playerSlug(g, "b")}.${ext}`;
+}
